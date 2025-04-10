@@ -32,6 +32,23 @@ const CONFIG = {
   ]
 };
 
+// Disallowed domains list that overrides the default allowed domains
+let DISALLOWED_DOMAINS = [];
+
+// Load disallowed domains from localStorage
+try {
+  const storedDisallowedDomains = localStorage.getItem('any-toc-disallowed-domains');
+  if (storedDisallowedDomains) {
+    DISALLOWED_DOMAINS = JSON.parse(storedDisallowedDomains);
+    if (!Array.isArray(DISALLOWED_DOMAINS)) {
+      DISALLOWED_DOMAINS = [];
+    }
+  }
+} catch (e) {
+  console.error('Error loading disallowed domains:', e);
+  DISALLOWED_DOMAINS = [];
+}
+
 /**
  * Checks if the current page is allowed to use the TOC
  * @returns {boolean} True if the current page is allowed
@@ -41,11 +58,20 @@ function isAllowedPage() {
   const currentDomain = window.location.hostname;
   
   console.log('Checking if TOC is allowed on:', currentURL);
+  console.log('Current domain:', currentDomain);
+  
+  // First check if domain is explicitly disallowed
+  for (const domain of DISALLOWED_DOMAINS) {
+    if (currentDomain.includes(domain)) {
+      console.log('Domain explicitly disallowed:', domain);
+      return false;
+    }
+  }
   
   // Check for allowed domains
   for (const domain of CONFIG.ALLOWED_DOMAINS) {
     if (currentDomain.includes(domain)) {
-      console.log('Domain allowed:', domain);
+      console.log('Domain allowed from built-in ALLOWED_DOMAINS:', domain);
       return true;
     }
   }
@@ -67,13 +93,17 @@ function isAllowedPage() {
   
   // Try to get custom allowed domains from storage
   const storedDomains = localStorage.getItem('any-toc-allowed-domains');
+  console.log('Stored domains from localStorage:', storedDomains);
+  
   if (storedDomains) {
     try {
       const customDomains = JSON.parse(storedDomains);
+      console.log('Parsed custom domains:', customDomains);
+      
       if (Array.isArray(customDomains)) {
         for (const domain of customDomains) {
           if (currentDomain.includes(domain)) {
-            console.log('Custom domain allowed:', domain);
+            console.log('Custom domain allowed from localStorage:', domain);
             return true;
           }
         }
@@ -939,47 +969,6 @@ window.setPosition = function(position) {
 };
 
 /**
- * Adds the current domain to the allowed list
- * Can be called from popup
- */
-window.addCurrentDomainToAllowList = function() {
-  const currentDomain = window.location.hostname;
-  if (!currentDomain) {
-    console.error('Cannot add empty domain to allow list');
-    return false;
-  }
-  
-  let customDomains = [];
-  const storedDomains = localStorage.getItem('any-toc-allowed-domains');
-  
-  if (storedDomains) {
-    try {
-      customDomains = JSON.parse(storedDomains);
-      if (!Array.isArray(customDomains)) {
-        customDomains = [];
-      }
-    } catch (e) {
-      console.error('Error parsing custom domains:', e);
-    }
-  }
-  
-  // Check if domain is already in list
-  if (customDomains.includes(currentDomain)) {
-    console.log('Domain already in allowed list:', currentDomain);
-    return true;
-  }
-  
-  // Add domain to list
-  customDomains.push(currentDomain);
-  localStorage.setItem('any-toc-allowed-domains', JSON.stringify(customDomains));
-  console.log('Added domain to allowed list:', currentDomain);
-  
-  // Reload the page to activate TOC
-  window.location.reload();
-  return true;
-};
-
-/**
  * Removes the current domain from the allowed list
  * Can be called from popup
  */
@@ -1007,17 +996,95 @@ window.removeCurrentDomainFromAllowList = function() {
   
   // Check if domain is in list
   const index = customDomains.indexOf(currentDomain);
-  if (index === -1) {
-    console.log('Domain not in allowed list:', currentDomain);
+  if (index !== -1) {
+    // Remove domain from allowed list if present
+    customDomains.splice(index, 1);
+    localStorage.setItem('any-toc-allowed-domains', JSON.stringify(customDomains));
+    console.log('Removed domain from allowed list:', currentDomain);
+  }
+  
+  // Check if domain is in built-in allowed domains
+  let isDomainInBuiltInList = false;
+  for (const domain of CONFIG.ALLOWED_DOMAINS) {
+    if (currentDomain.includes(domain)) {
+      isDomainInBuiltInList = true;
+      break;
+    }
+  }
+  
+  // If domain is in built-in list, add it to disallowed list
+  if (isDomainInBuiltInList) {
+    // Add to disallowed domains list
+    let disallowedDomains = [...DISALLOWED_DOMAINS];
+    if (!disallowedDomains.includes(currentDomain)) {
+      disallowedDomains.push(currentDomain);
+      localStorage.setItem('any-toc-disallowed-domains', JSON.stringify(disallowedDomains));
+      console.log('Added domain to disallowed list:', currentDomain);
+    }
+  }
+  
+  // Reload the page to deactivate TOC
+  window.location.reload();
+  return true;
+};
+
+/**
+ * Adds the current domain to the allowed list
+ * Can be called from popup
+ */
+window.addCurrentDomainToAllowList = function() {
+  const currentDomain = window.location.hostname;
+  if (!currentDomain) {
+    console.error('Cannot add empty domain to allow list');
     return false;
   }
   
-  // Remove domain from list
-  customDomains.splice(index, 1);
-  localStorage.setItem('any-toc-allowed-domains', JSON.stringify(customDomains));
-  console.log('Removed domain from allowed list:', currentDomain);
+  // First remove from disallowed domains if present
+  let disallowedDomains = [...DISALLOWED_DOMAINS];
+  const disallowedIndex = disallowedDomains.indexOf(currentDomain);
+  if (disallowedIndex !== -1) {
+    disallowedDomains.splice(disallowedIndex, 1);
+    localStorage.setItem('any-toc-disallowed-domains', JSON.stringify(disallowedDomains));
+    console.log('Removed domain from disallowed list:', currentDomain);
+  }
   
-  // Reload the page to deactivate TOC
+  // Check if domain is already in built-in allowed list
+  for (const domain of CONFIG.ALLOWED_DOMAINS) {
+    if (currentDomain.includes(domain)) {
+      console.log('Domain already in built-in allowed list, no need to add to custom list');
+      // Reload the page to activate TOC
+      window.location.reload();
+      return true;
+    }
+  }
+  
+  // Otherwise add to custom allowed domains
+  let customDomains = [];
+  const storedDomains = localStorage.getItem('any-toc-allowed-domains');
+  
+  if (storedDomains) {
+    try {
+      customDomains = JSON.parse(storedDomains);
+      if (!Array.isArray(customDomains)) {
+        customDomains = [];
+      }
+    } catch (e) {
+      console.error('Error parsing custom domains:', e);
+    }
+  }
+  
+  // Check if domain is already in list
+  if (customDomains.includes(currentDomain)) {
+    console.log('Domain already in allowed list:', currentDomain);
+    return true;
+  }
+  
+  // Add domain to list
+  customDomains.push(currentDomain);
+  localStorage.setItem('any-toc-allowed-domains', JSON.stringify(customDomains));
+  console.log('Added domain to allowed list:', currentDomain);
+  
+  // Reload the page to activate TOC
   window.location.reload();
   return true;
 };
