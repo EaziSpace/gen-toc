@@ -657,7 +657,7 @@ function buildTOC(headings) {
 }
 
 /**
- * Extracts all h1, h2 headings from the page
+ * Extracts all h1, h2, h3 headings from the page
  * @returns {Array} An array of heading objects containing text, level, and position
  */
 window.extractHeadings = function() {
@@ -690,14 +690,14 @@ window.extractHeadings = function() {
     mainContainer = document.body;
   }
   
-  // Find all h1, h2 elements inside the main container
+  // Find all h1, h2, h3 elements inside the main container
   console.log('Searching for headings in container');
-  let headingElements = mainContainer.querySelectorAll('h1, h2');
+  let headingElements = mainContainer.querySelectorAll('h1, h2, h3');
   
   // If no headings are found in the main container, try the entire document
   if (headingElements.length === 0) {
     console.log('No headings found in main container, searching entire document');
-    const allHeadings = document.querySelectorAll('h1, h2');
+    const allHeadings = document.querySelectorAll('h1, h2, h3');
     
     if (allHeadings.length === 0) {
       console.log('No headings found in entire document');
@@ -813,7 +813,7 @@ function setupContentChangeDetection() {
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             // If the node is a heading or contains headings
-            if (/^H[1-4]$/i.test(node.tagName) || node.querySelector('h1, h2')) {
+            if (/^H[1-4]$/i.test(node.tagName) || node.querySelector('h1, h2, h3')) {
               console.log('Detected new heading content');
               return true;
             }
@@ -824,7 +824,7 @@ function setupContentChangeDetection() {
         for (const node of mutation.removedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (/^H[1-4]$/i.test(node.tagName) || 
-                (node.querySelector && node.querySelector('h1, h2'))) {
+                (node.querySelector && node.querySelector('h1, h2, h3'))) {
               console.log('Detected removed heading content');
               return true;
             }

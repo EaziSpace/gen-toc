@@ -1,6 +1,6 @@
 # Any-TOC: Chat Table of Contents
 
-A Chrome extension that extracts h1, h2, and h3 headings from the element with id 'main' on a webpage and displays them as a table of contents directly on the page.
+A Chrome extension that extracts h1, h2, h3, h3, and h3 headings from the element with id 'main' on a webpage and displays them as a table of contents directly on the page.
 
 ## Features
 
@@ -31,7 +31,7 @@ A Chrome extension that extracts h1, h2, and h3 headings from the element with i
 
 ## Usage
 
-1. Navigate to any webpage that has an element with id 'main' containing h1, h2, and h3 headings
+1. Navigate to any webpage that has an element with id 'main' containing h1, h2, h3, h3, and h3 headings
 2. The TOC sidebar will automatically appear on the right side of the page
 3. You can:
    - Click on any heading in the TOC to scroll to that section
@@ -42,7 +42,7 @@ A Chrome extension that extracts h1, h2, and h3 headings from the element with i
 
 ## Customization
 
-The extension works best on pages with a clear heading structure using h1, h2, and h3 tags inside an element with id 'main'. If your target website uses a different id or structure, you may need to modify the `content.js` file:
+The extension works best on pages with a clear heading structure using h1, h2, h3, h3, and h3 tags inside an element with id 'main'. If your target website uses a different id or structure, you may need to modify the `content.js` file:
 
 ```javascript
 // Find the main container, fallback to document body if not found
