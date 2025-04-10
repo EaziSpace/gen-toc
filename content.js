@@ -14,6 +14,19 @@ const ACTIONS = {
   GET_POSITION: 'getPosition'
 };
 
+// Try to load stored configuration
+try {
+  const storedConfig = localStorage.getItem('any-toc-config');
+  if (storedConfig) {
+    const parsedConfig = JSON.parse(storedConfig);
+    if (parsedConfig && typeof parsedConfig === 'object') {
+      Object.assign(CONFIG, parsedConfig);
+    }
+  }
+} catch (e) {
+  console.error('Error loading saved TOC configuration:', e);
+}
+
 // Ensure global namespace availability
 window.anyTOC = window.anyTOC || {};
 
@@ -86,6 +99,44 @@ function sendPingToBackground() {
 }
 
 /**
+ * Automatically refreshes the TOC multiple times after page load
+ * Calls refresh up to 3 times with 5 second intervals until loading element is hidden
+ */
+function autoRefreshAfterPageLoad() {
+  let refreshCount = 0;
+  const maxRefreshes = 3;
+  
+  function performRefresh() {
+    const loadingElement = document.getElementById('any-toc-loading');
+    
+    // Stop if we've reached max refreshes or loading element doesn't exist
+    if (refreshCount >= maxRefreshes || !loadingElement) {
+      console.log(`Auto-refresh complete: ${refreshCount} refreshes performed`);
+      return;
+    }
+    
+    // Stop if loading element is hidden (content already loaded)
+    if (loadingElement.style.display === 'none') {
+      console.log('Auto-refresh complete: TOC content already loaded');
+      return;
+    }
+    
+    console.log(`Performing auto-refresh ${refreshCount + 1}/${maxRefreshes}`);
+    refreshTOC(true); // Force refresh
+    refreshCount++;
+    
+    // Schedule next refresh if needed
+    if (refreshCount < maxRefreshes) {
+      console.log(`Scheduling next auto-refresh in 5 seconds`);
+      setTimeout(performRefresh, 5000);
+    }
+  }
+  
+  // Start the first refresh
+  performRefresh();
+}
+
+/**
  * Initialize TOC when DOM is ready
  */
 function initOnDOMContentLoaded() {
@@ -99,14 +150,8 @@ function initOnDOMContentLoaded() {
     
     initTOC();
     
-    // Ensure periodic refresh is set up
-    try {
-      if (typeof setupPeriodicRefresh === 'function') {
-        setupPeriodicRefresh();
-      }
-    } catch (e) {
-      console.error('Error setting up periodic refresh:', e);
-    }
+    // Start auto-refresh sequence after initialization
+    autoRefreshAfterPageLoad();
     
     // Try again after a delay if not successful
     initTocTimeout = setTimeout(() => {
@@ -119,10 +164,8 @@ function initOnDOMContentLoaded() {
         }
         initTOC();
         
-        // Second attempt to set up periodic refresh
-        if (typeof setupPeriodicRefresh === 'function' && !window.tocRefreshInterval) {
-          setupPeriodicRefresh();
-        }
+        // Try auto-refresh again if needed
+        autoRefreshAfterPageLoad();
       } catch (e) {
         console.error('Error initializing TOC on timeout:', e);
       }
@@ -170,7 +213,13 @@ if (typeof chrome !== 'undefined' && chrome && chrome.runtime && chrome.runtime.
         case ACTIONS.REFRESH:
           console.log('Refresh TOC message received');
           console.log('Refresh action matched successfully');
-          refreshTOC();
+          refreshTOC(true);
+          
+          // Start auto-refresh sequence when user manually refreshes
+          if (typeof autoRefreshAfterPageLoad === 'function') {
+            autoRefreshAfterPageLoad();
+          }
+          
           sendResponse({ success: true });
           break;
         
@@ -330,7 +379,13 @@ function initTOC() {
     refreshButton.className = 'any-toc-button';
     refreshButton.addEventListener('click', (e) => {
       console.log('Refresh button clicked');
-      refreshTOC();
+      refreshTOC(true); // Force refresh
+      
+      // Start auto-refresh sequence when user manually refreshes
+      if (typeof autoRefreshAfterPageLoad === 'function') {
+        autoRefreshAfterPageLoad();
+      }
+      
       e.stopPropagation();
     });
     
@@ -390,7 +445,6 @@ function initTOC() {
     console.log('Appending TOC elements to document body');
     document.body.appendChild(tocSidebar);
     document.body.appendChild(collapsedButton);
-  
     
     // Save position preference if set
     const position = localStorage.getItem('any-toc-position');
@@ -414,214 +468,16 @@ function initTOC() {
     // Setup mutation observer to detect content changes
     setupContentChangeDetection();
     
-    // Setup automatic periodic refresh every 2 seconds
-    setupPeriodicRefresh();
-    
     console.log('TOC initialization completed successfully');
     window.isInitialized = true;
     
-    // Add an additional delayed refresh to handle dynamic content
-    setTimeout(() => {
-      console.log('Executing final delayed refresh to catch late-loaded content');
-      refreshTOC();
-    }, 3000);
+    // Initial refresh to populate TOC
+    refreshTOC(true);
     
   } catch (error) {
     console.error('Error initializing TOC:', error);
   }
 }
-
-/**
- * Sets up automatic periodic refresh for the TOC
- */
-function setupPeriodicRefresh() {
-  console.log('Setting up periodic TOC refresh every 2 seconds');
-  
-  // Clear any existing interval to avoid duplicates
-  if (window.tocRefreshInterval) {
-    clearInterval(window.tocRefreshInterval);
-  }
-  
-  // Store the interval ID so we can clear it if needed
-  window.tocRefreshInterval = setInterval(() => {
-    try {
-      const tocSidebar = document.getElementById('any-toc-sidebar');
-      
-      // Check if user is currently interacting with the TOC
-      if (window.isUserInteractingWithTOC) {
-        console.log('User is interacting with TOC, skipping auto-refresh');
-        return;
-      }
-      
-      // Only refresh if the sidebar exists and is visible
-      if (tocSidebar && !tocSidebar.classList.contains('hidden')) {
-        // Check if page content has actually changed since last refresh
-        const currentBodyHTML = document.body.innerHTML.length;
-        
-        if (!window.lastBodyLength || Math.abs(currentBodyHTML - window.lastBodyLength) > 50) {
-          console.log('Page content changed, auto-refresh triggered');
-          window.lastBodyLength = currentBodyHTML;
-          if (typeof refreshTOC === 'function') {
-            refreshTOC();
-          } else if (window.refreshTOC && typeof window.refreshTOC === 'function') {
-            window.refreshTOC();
-          }
-        } else {
-          console.log('Page content unchanged, skipping auto-refresh');
-        }
-      } else {
-        console.log('Auto-refresh skipped, TOC is hidden or not initialized');
-      }
-    } catch (e) {
-      console.error('Error during periodic refresh:', e);
-    }
-  }, 2000); // Refresh every 2 seconds
-  
-  // Add event listener to pause refresh interval when tab becomes inactive
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      // Tab is inactive, clear the interval to save resources
-      if (window.tocRefreshInterval) {
-        console.log('Tab inactive, pausing TOC refresh interval');
-        clearInterval(window.tocRefreshInterval);
-        window.tocRefreshInterval = null;
-      }
-    } else {
-      // Tab is active again, restart the interval if it was cleared
-      if (!window.tocRefreshInterval) {
-        console.log('Tab active again, resuming TOC refresh interval');
-        setupPeriodicRefresh();
-      }
-    }
-  });
-  
-  // Set up event listeners to detect user interaction with TOC
-  const tocSidebar = document.getElementById('any-toc-sidebar');
-  if (tocSidebar) {
-    tocSidebar.addEventListener('mouseenter', () => {
-      window.isUserInteractingWithTOC = true;
-    });
-    
-    tocSidebar.addEventListener('mouseleave', () => {
-      window.isUserInteractingWithTOC = false;
-    });
-    
-    // Also track clicks to prevent refresh while user is clicking
-    tocSidebar.addEventListener('mousedown', () => {
-      window.isUserInteractingWithTOC = true;
-      // Set a timeout to reset after a while in case mouseup isn't caught
-      setTimeout(() => {
-        window.isUserInteractingWithTOC = false;
-      }, 5000);
-    });
-    
-    tocSidebar.addEventListener('mouseup', () => {
-      // Small delay to complete the click action
-      setTimeout(() => {
-        window.isUserInteractingWithTOC = false;
-      }, 500);
-    });
-  }
-}
-
-/**
- * Toggles the TOC sidebar visibility
- */
-window.toggleTOCSidebar = function() {
-  console.log('toggleTOCSidebar called');
-  
-  const tocSidebar = document.getElementById('any-toc-sidebar');
-  const collapsedButton = document.getElementById('any-toc-collapsed');
-  
-  if (!tocSidebar || !collapsedButton) {
-    console.error('TOC elements not found in the DOM');
-    return;
-  }
-  
-  console.log('Current state - sidebar hidden:', tocSidebar.classList.contains('hidden'));
-  console.log('Current state - collapsed visible:', collapsedButton.classList.contains('visible'));
-  
-  if (tocSidebar.classList.contains('hidden')) {
-    console.log('Showing sidebar');
-    tocSidebar.classList.remove('hidden');
-    collapsedButton.classList.remove('visible');
-    localStorage.setItem('any-toc-visibility', 'visible');
-    
-    // Immediately refresh the TOC when showing it
-    if (typeof refreshTOC === 'function') {
-      refreshTOC(true); // Force refresh
-    } else if (window.refreshTOC && typeof window.refreshTOC === 'function') {
-      window.refreshTOC(true); // Force refresh
-    }
-    
-    // Make sure periodic refresh is running
-    if (!window.tocRefreshInterval && typeof setupPeriodicRefresh === 'function') {
-      setupPeriodicRefresh();
-    }
-  } else {
-    console.log('Hiding sidebar');
-    tocSidebar.classList.add('hidden');
-    collapsedButton.classList.add('visible');
-    localStorage.setItem('any-toc-visibility', 'hidden');
-    
-    // No need to constantly refresh when hidden, can optionally clear interval here
-    // if (window.tocRefreshInterval) {
-    //   clearInterval(window.tocRefreshInterval);
-    //   window.tocRefreshInterval = null;
-    // }
-  }
-};
-
-/**
- * Toggles the position of the TOC sidebar (left or right)
- */
-window.togglePosition = function() {
-  console.log('togglePosition called');
-  
-  const tocSidebar = document.getElementById('any-toc-sidebar');
-  const collapsedButton = document.getElementById('any-toc-collapsed');
-  
-  if (!tocSidebar || !collapsedButton) {
-    console.error('TOC elements not found in the DOM');
-    return;
-  }
-  
-  if (tocSidebar.classList.contains('left')) {
-    setPosition('right');
-  } else {
-    setPosition('left');
-  }
-};
-
-/**
- * Sets the position of the TOC sidebar (left or right)
- * @param {string} position - 'left' or 'right'
- */
-window.setPosition = function(position) {
-  console.log('setPosition called with:', position);
-  
-  const tocSidebar = document.getElementById('any-toc-sidebar');
-  const collapsedButton = document.getElementById('any-toc-collapsed');
-  
-  if (!tocSidebar || !collapsedButton) {
-    console.error('TOC elements not found in the DOM');
-    return;
-  }
-  
-  if (position === 'left') {
-    console.log('Moving to left side');
-    tocSidebar.classList.add('left');
-    collapsedButton.classList.add('left');
-    localStorage.setItem('any-toc-position', 'left');
-  } else {
-    console.log('Moving to right side');
-    tocSidebar.classList.remove('left');
-    collapsedButton.classList.remove('left');
-    localStorage.setItem('any-toc-position', 'right');
-  }
-  
-  return position;
-};
 
 /**
  * Builds the TOC from the extracted headings
@@ -632,6 +488,9 @@ function buildTOC(headings) {
   const loadingElement = document.getElementById('any-toc-loading');
   
   loadingElement.style.display = 'none';
+  
+  // Create a document fragment for better performance when adding many items
+  const fragment = document.createDocumentFragment();
   
   headings.forEach(heading => {
     const listItem = document.createElement('li');
@@ -644,12 +503,21 @@ function buildTOC(headings) {
     
     // Set up click handler to scroll to the heading
     link.addEventListener('click', () => {
+      // Scroll to the heading
       scrollToHeading(heading.id, heading.position);
     });
     
     listItem.appendChild(link);
-    tocList.appendChild(listItem);
+    fragment.appendChild(listItem);
   });
+  
+  // Use replaceChildren to clear and append in one operation if available
+  if (typeof tocList.replaceChildren === 'function') {
+    tocList.replaceChildren(fragment);
+  } else {
+    tocList.innerHTML = '';
+    tocList.appendChild(fragment);
+  }
 }
 
 /**
@@ -686,14 +554,14 @@ window.extractHeadings = function() {
     mainContainer = document.body;
   }
   
-  // Find all h1, h2, h3, h4 elements inside the main container
+  // Find all h1, h2, h3 elements inside the main container
   console.log('Searching for headings in container');
-  let headingElements = mainContainer.querySelectorAll('h1, h2, h3, h4');
+  let headingElements = mainContainer.querySelectorAll('h1, h2, h3');
   
   // If no headings are found in the main container, try the entire document
   if (headingElements.length === 0) {
     console.log('No headings found in main container, searching entire document');
-    const allHeadings = document.querySelectorAll('h1, h2, h3, h4');
+    const allHeadings = document.querySelectorAll('h1, h2, h3');
     
     if (allHeadings.length === 0) {
       console.log('No headings found in entire document');
@@ -794,22 +662,10 @@ function getCurrentPosition() {
 }
 
 /**
- * Sets up a mutation observer to detect content changes and refresh TOC
+ * Sets up a mutation observer to detect content changes
  */
 function setupContentChangeDetection() {
   console.log('Setting up mutation observer for content changes');
-  
-  // Create a throttled refresh function to avoid excessive updates
-  let refreshTimeout = null;
-  const throttledRefresh = () => {
-    if (refreshTimeout) {
-      clearTimeout(refreshTimeout);
-    }
-    refreshTimeout = setTimeout(() => {
-      console.log('Content changed, refreshing TOC');
-      refreshTOC();
-    }, 2000); // Wait 2 seconds after changes before refreshing
-  };
   
   // Create mutation observer
   const observer = new MutationObserver((mutations) => {
@@ -821,7 +677,7 @@ function setupContentChangeDetection() {
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             // If the node is a heading or contains headings
-            if (/^H[1-4]$/i.test(node.tagName) || node.querySelector('h1, h2, h3, h4')) {
+            if (/^H[1-4]$/i.test(node.tagName) || node.querySelector('h1, h2, h3')) {
               console.log('Detected new heading content');
               return true;
             }
@@ -832,7 +688,7 @@ function setupContentChangeDetection() {
         for (const node of mutation.removedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (/^H[1-4]$/i.test(node.tagName) || 
-                (node.querySelector && node.querySelector('h1, h2, h3, h4'))) {
+                (node.querySelector && node.querySelector('h1, h2, h3'))) {
               console.log('Detected removed heading content');
               return true;
             }
@@ -844,7 +700,7 @@ function setupContentChangeDetection() {
     });
     
     if (hasRelevantChanges) {
-      throttledRefresh();
+      console.log('Content changes detected that affect headings');
     }
   });
   
@@ -855,4 +711,97 @@ function setupContentChangeDetection() {
   });
   
   console.log('Mutation observer setup complete');
-} 
+}
+
+/**
+ * Toggles the TOC sidebar visibility
+ */
+window.toggleTOCSidebar = function() {
+  console.log('toggleTOCSidebar called');
+  
+  const tocSidebar = document.getElementById('any-toc-sidebar');
+  const collapsedButton = document.getElementById('any-toc-collapsed');
+  
+  if (!tocSidebar || !collapsedButton) {
+    console.error('TOC elements not found in the DOM');
+    return;
+  }
+  
+  console.log('Current state - sidebar hidden:', tocSidebar.classList.contains('hidden'));
+  console.log('Current state - collapsed visible:', collapsedButton.classList.contains('visible'));
+  
+  if (tocSidebar.classList.contains('hidden')) {
+    console.log('Showing sidebar');
+    tocSidebar.classList.remove('hidden');
+    collapsedButton.classList.remove('visible');
+    localStorage.setItem('any-toc-visibility', 'visible');
+    
+    // Immediately refresh the TOC when showing it
+    if (typeof refreshTOC === 'function') {
+      refreshTOC(true); // Force refresh
+    } else if (window.refreshTOC && typeof window.refreshTOC === 'function') {
+      window.refreshTOC(true); // Force refresh
+    }
+    
+    // Start auto-refresh sequence
+    if (typeof autoRefreshAfterPageLoad === 'function') {
+      autoRefreshAfterPageLoad();
+    }
+  } else {
+    console.log('Hiding sidebar');
+    tocSidebar.classList.add('hidden');
+    collapsedButton.classList.add('visible');
+    localStorage.setItem('any-toc-visibility', 'hidden');
+  }
+};
+
+/**
+ * Toggles the position of the TOC sidebar (left or right)
+ */
+window.togglePosition = function() {
+  console.log('togglePosition called');
+  
+  const tocSidebar = document.getElementById('any-toc-sidebar');
+  const collapsedButton = document.getElementById('any-toc-collapsed');
+  
+  if (!tocSidebar || !collapsedButton) {
+    console.error('TOC elements not found in the DOM');
+    return;
+  }
+  
+  if (tocSidebar.classList.contains('left')) {
+    setPosition('right');
+  } else {
+    setPosition('left');
+  }
+};
+
+/**
+ * Sets the position of the TOC sidebar (left or right)
+ * @param {string} position - 'left' or 'right'
+ */
+window.setPosition = function(position) {
+  console.log('setPosition called with:', position);
+  
+  const tocSidebar = document.getElementById('any-toc-sidebar');
+  const collapsedButton = document.getElementById('any-toc-collapsed');
+  
+  if (!tocSidebar || !collapsedButton) {
+    console.error('TOC elements not found in the DOM');
+    return;
+  }
+  
+  if (position === 'left') {
+    console.log('Moving to left side');
+    tocSidebar.classList.add('left');
+    collapsedButton.classList.add('left');
+    localStorage.setItem('any-toc-position', 'left');
+  } else {
+    console.log('Moving to right side');
+    tocSidebar.classList.remove('left');
+    collapsedButton.classList.remove('left');
+    localStorage.setItem('any-toc-position', 'right');
+  }
+  
+  return position;
+}; 
