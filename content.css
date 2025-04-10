@@ -1,0 +1,144 @@
+.any-toc-sidebar {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 280px;
+  max-height: 80vh;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.any-toc-sidebar.left {
+  left: 20px;
+  right: auto;
+}
+
+.any-toc-sidebar.hidden {
+  transform: translateX(calc(100% + 20px));
+}
+
+.any-toc-sidebar.left.hidden {
+  transform: translateX(calc(-100% - 20px));
+}
+
+.any-toc-header {
+  padding: 10px 15px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f8f8f8;
+  border-radius: 8px 8px 0 0;
+}
+
+.any-toc-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.any-toc-controls {
+  display: flex;
+  gap: 5px;
+}
+
+.any-toc-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: #555;
+}
+
+.any-toc-button:hover {
+  background-color: #eee;
+  color: #000;
+}
+
+.any-toc-container {
+  padding: 10px 0;
+  overflow-y: auto;
+  max-height: calc(80vh - 46px);
+}
+
+#any-toc-list {
+  list-style-type: none;
+  padding: 0 15px;
+  margin: 0;
+}
+
+#any-toc-loading, #any-toc-no-headings {
+  padding: 15px;
+  color: #666;
+  font-style: italic;
+}
+
+.any-toc-h1 {
+  margin: 8px 0;
+  font-weight: bold;
+  color: #333;
+  text-decoration: none;
+  cursor: pointer;
+  display: block;
+}
+
+.any-toc-h2 {
+  margin: 6px 0 6px 15px;
+  font-weight: normal;
+  color: #444;
+  text-decoration: none;
+  cursor: pointer;
+  display: block;
+}
+
+.any-toc-h3 {
+  margin: 4px 0 4px 30px;
+  font-weight: normal;
+  font-size: 0.9em;
+  color: #555;
+  text-decoration: none;
+  cursor: pointer;
+  display: block;
+}
+
+.any-toc-link:hover {
+  background-color: #f5f5f5;
+}
+
+.any-toc-collapsed {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  background-color: #4285f4;
+  color: white;
+  padding: 8px 12px;
+  cursor: pointer;
+  transform: translateY(-50%) rotate(-90deg);
+  transform-origin: right bottom;
+  border-radius: 8px 8px 0 0;
+  font-weight: bold;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  z-index: 9999;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  display: none;
+}
+
+.any-toc-collapsed.left {
+  left: 0;
+  right: auto;
+  transform: translateY(-50%) rotate(90deg);
+  transform-origin: left bottom;
+}
+
+.any-toc-collapsed.visible {
+  display: block;
+} 

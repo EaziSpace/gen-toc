@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Any TOC",
+  "version": "1.0.0",
+  "description": "Automatically generates a Table of Contents for any website",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/toc-icon.svg", "icons/close-icon.svg", "icons/collapse-icon.svg"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+} 
