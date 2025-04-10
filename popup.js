@@ -13,6 +13,16 @@ document.addEventListener('DOMContentLoaded', function() {
   const pageStatusText = document.getElementById('page-status');
   const allowPageButton = document.getElementById('allow-page');
   const disallowPageButton = document.getElementById('disallow-page');
+  const thankYouMessage = document.querySelector('.thank-you-message');
+  
+  // Add a simple fade-in effect for the thank you message
+  if (thankYouMessage) {
+    thankYouMessage.style.opacity = '0';
+    setTimeout(() => {
+      thankYouMessage.style.transition = 'opacity 0.8s ease-in-out';
+      thankYouMessage.style.opacity = '1';
+    }, 500);
+  }
   
   // Set initial status
   updateStatus('Checking content script status...');

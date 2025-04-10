@@ -173,4 +173,43 @@ button.active {
 
 #disallow-page {
   background-color: #db4437;
+}
+
+.author-section {
+  margin-top: 15px;
+  text-align: center;
+  padding: 10px 0;
+  border-top: 1px solid #eee;
+  font-size: 13px;
+  color: #666;
+}
+
+.author-info {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.author-info a {
+  color: #4285f4;
+  text-decoration: none;
+  margin-left: 5px;
+  font-weight: 500;
+}
+
+.author-info a:hover {
+  text-decoration: underline;
+}
+
+.linkedin-icon {
+  margin-left: 4px;
+  vertical-align: middle;
+  margin-top: -2px;
+}
+
+.thank-you-message {
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #0f9d58;
+  font-size: 14px;
 } 
