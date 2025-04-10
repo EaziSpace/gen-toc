@@ -3,7 +3,7 @@
  * from the main content area to build a table of contents.
  */
 
-// Các hằng số cho các action
+// Constants for actions
 const ACTIONS = {
   PING: 'ping',
   GET_HEADINGS: 'getHeadings',
@@ -14,33 +14,33 @@ const ACTIONS = {
   GET_POSITION: 'getPosition'
 };
 
-// Thiết lập biến để kiểm soát việc khởi tạo
+// Setup variables to control initialization
 window.isInitialized = false;
 let initTocTimeout;
 
-// Thông báo rằng content script đã được tải
+// Notify that content script has been loaded
 console.log('Content script loaded, sending ping to background');
 sendPingToBackground();
 
-// Chạy initTOC ngay lập tức khi content script được chạy
+// Run initTOC immediately when content script runs
 try {
   initTOC();
 } catch (e) {
   console.error('Error initializing TOC immediately:', e);
 }
 
-// Khởi tạo TOC khi DOM đã sẵn sàng
+// Initialize TOC when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initOnDOMContentLoaded);
 } else {
   initOnDOMContentLoaded();
 }
 
-// Đặt định kỳ gửi ping để đảm bảo background biết chúng ta đã sẵn sàng
+// Set periodic ping to ensure background knows we're ready
 setInterval(sendPingToBackground, 10000);
 
 /**
- * Gửi thông điệp ping đến background script
+ * Send ping message to background script
  */
 function sendPingToBackground() {
   try {
@@ -57,14 +57,14 @@ function sendPingToBackground() {
 }
 
 /**
- * Khởi tạo TOC khi DOM đã sẵn sàng
+ * Initialize TOC when DOM is ready
  */
 function initOnDOMContentLoaded() {
   console.log('DOM content loaded, initializing TOC');
   try {
     initTOC();
     
-    // Thử lại sau một khoảng thời gian nếu chưa thành công
+    // Try again after a delay if not successful
     initTocTimeout = setTimeout(() => {
       console.log('Timeout fired, initializing TOC again');
       try {
@@ -78,7 +78,7 @@ function initOnDOMContentLoaded() {
   }
 }
 
-// Lắng nghe các thông điệp từ popup hoặc background script
+// Listen for messages from popup or background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received in content script:', message);
   console.log('Message action type:', typeof message.action);
@@ -87,7 +87,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Comparing with REFRESH:', message.action === ACTIONS.REFRESH);
   
   try {
-    // Xử lý ping từ background script để kiểm tra kết nối
+    // Handle ping from background script to check connection
     if (message.action === ACTIONS.PING) {
       console.log('Received ping in content script');
       sendResponse({ pong: true });
@@ -140,14 +140,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ error: e.message });
   }
   
-  return true; // Giữ kết nối mở để đảm bảo sendResponse hoạt động
+  return true; // Keep connection open to ensure sendResponse works
 });
 
 /**
  * Creates and injects the TOC sidebar
  */
 function initTOC() {
-  // Nếu đã khởi tạo thành công trước đó, không cần làm lại
+  // If successfully initialized before, no need to do it again
   if (window.isInitialized) {
     console.log('TOC already initialized, skipping');
     return;

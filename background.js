@@ -2,7 +2,7 @@
  * Background script to handle communication between popup and content scripts
  */
 
-// Lưu trữ thông tin về các tab đã inject content script
+// Store information about tabs with injected content script
 const injectedTabs = {};
 
 // Message action constants
@@ -13,25 +13,25 @@ const ACTIONS = {
   REFRESH_TOC: 'refreshTOC',
 };
 
-// Đăng ký listener khi extension khởi động
+// Register listener when extension starts
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed');
 });
 
-// Lắng nghe khi tab được tạo mới hoặc cập nhật
+// Listen for tab updates or creation
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete') {
     console.log(`Tab ${tabId} loaded completely`);
     
-    // Kiểm tra xem tab có phải là một trang web (không phải chrome://, extension://, etc.)
+    // Check if the tab is a web page (not chrome://, extension://, etc.)
     if (tab.url && tab.url.startsWith('http')) {
-      // Đánh dấu tab là cần kiểm tra
+      // Mark tab for checking
       checkContentScriptInjection(tabId);
     }
   }
 });
 
-// Lắng nghe khi tab bị đóng để xóa trạng thái
+// Listen for tab closure to clean up state
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (injectedTabs[tabId]) {
     delete injectedTabs[tabId];
@@ -39,9 +39,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 });
 
-// Lắng nghe thông điệp từ content script để đánh dấu tab đã inject
+// Listen for messages from content script to mark tab as injected
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Nếu là content script thông báo đã inject thành công
+  // If this is content script notifying successful injection
   if (message.action === ACTIONS.PING && sender.tab) {
     const tabId = sender.tab.id;
     console.log(`Received ping from content script in tab ${tabId}`);
@@ -53,16 +53,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   
-  // Xử lý các thông điệp khác
+  // Handle other messages
   handleMessage(message, sender, sendResponse);
   return true;
 });
 
 /**
- * Xử lý các thông điệp gửi đến background script
- * @param {Object} message - Thông điệp nhận được
- * @param {Object} sender - Thông tin người gửi
- * @param {Function} sendResponse - Hàm callback để phản hồi
+ * Handle messages sent to background script
+ * @param {Object} message - The received message
+ * @param {Object} sender - Sender information
+ * @param {Function} sendResponse - Callback function to respond
  */
 function handleMessage(message, sender, sendResponse) {
   console.log('Background received message:', message);
@@ -70,7 +70,7 @@ function handleMessage(message, sender, sendResponse) {
   console.log('Is toggle action?', message.action === ACTIONS.TOGGLE_TOC);
   console.log('Is refresh action?', message.action === ACTIONS.REFRESH_TOC);
   
-  // Xác định ID của tab
+  // Determine tab ID
   const tabId = sender.tab ? sender.tab.id : message.tabId;
   
   if (!tabId) {
@@ -79,7 +79,7 @@ function handleMessage(message, sender, sendResponse) {
     return;
   }
 
-  // Kiểm tra trạng thái tab
+  // Check tab status
   if (message.action === ACTIONS.CHECK_STATUS) {
     checkContentScriptStatus(tabId)
       .then(status => sendResponse(status))
@@ -90,7 +90,7 @@ function handleMessage(message, sender, sendResponse) {
     return;
   }
   
-  // Xử lý các loại thông điệp tương tác với content script
+  // Handle interaction messages with content script
   if (message.action === ACTIONS.TOGGLE_TOC || message.action === ACTIONS.REFRESH_TOC) {
     console.log('Handling action:', message.action, 'for tab:', tabId);
     handleContentScriptAction(tabId, message)
@@ -109,25 +109,25 @@ function handleMessage(message, sender, sendResponse) {
 }
 
 /**
- * Kiểm tra xem content script đã được inject vào tab chưa
- * @param {number} tabId - ID của tab cần kiểm tra
- * @returns {Promise<Object>} - Trạng thái của content script
+ * Check if content script has been injected into the tab
+ * @param {number} tabId - ID of the tab to check
+ * @returns {Promise<Object>} - Content script status
  */
 async function checkContentScriptStatus(tabId) {
   return new Promise((resolve, reject) => {
-    // Nếu đã biết tab được inject
+    // If we already know the tab is injected
     if (injectedTabs[tabId] && injectedTabs[tabId].injected) {
       console.log(`Tab ${tabId} already has content script injected`);
       resolve({ ready: true });
       return;
     }
 
-    // Kiểm tra bằng cách gửi ping
+    // Check by sending a ping
     try {
       chrome.tabs.sendMessage(tabId, { action: ACTIONS.PING }, response => {
         if (chrome.runtime.lastError) {
           console.log(`Content script not detected in tab ${tabId}, trying to inject`);
-          // Thử inject content script
+          // Try to inject content script
           injectContentScript(tabId)
             .then(() => {
               injectedTabs[tabId] = { injected: true, timestamp: Date.now() };
@@ -151,8 +151,8 @@ async function checkContentScriptStatus(tabId) {
 }
 
 /**
- * Kiểm tra và inject content script nếu cần
- * @param {number} tabId - ID của tab cần kiểm tra
+ * Check and inject content script if needed
+ * @param {number} tabId - ID of the tab to check
  */
 function checkContentScriptInjection(tabId) {
   chrome.tabs.sendMessage(tabId, { action: ACTIONS.PING }, response => {
@@ -174,15 +174,15 @@ function checkContentScriptInjection(tabId) {
 }
 
 /**
- * Xử lý các hành động tương tác với content script
- * @param {number} tabId - ID của tab
- * @param {Object} message - Thông điệp cần gửi
- * @returns {Promise<Object>} - Kết quả của hành động
+ * Handle actions that interact with the content script
+ * @param {number} tabId - Tab ID
+ * @param {Object} message - Message to send
+ * @returns {Promise<Object>} - Result of the action
  */
 async function handleContentScriptAction(tabId, message) {
   return new Promise(async (resolve, reject) => {
     try {
-      // Kiểm tra xem content script đã được inject chưa
+      // Check if content script has been injected
       const status = await checkContentScriptStatus(tabId).catch(err => ({ ready: false, error: err.message }));
       
       if (!status.ready) {
@@ -201,7 +201,7 @@ async function handleContentScriptAction(tabId, message) {
         console.log('Mapping REFRESH_TOC to refresh for content script');
       }
       
-      // Gửi thông điệp đến content script
+      // Send message to content script
       chrome.tabs.sendMessage(tabId, { action: contentAction }, response => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
@@ -216,9 +216,9 @@ async function handleContentScriptAction(tabId, message) {
 }
 
 /**
- * Inject content script vào tab
- * @param {number} tabId - ID của tab cần inject content script
- * @returns {Promise<void>} - Promise giải quyết khi inject thành công
+ * Inject content script into tab
+ * @param {number} tabId - ID of the tab to inject content script
+ * @returns {Promise<void>} - Promise resolved when injection is successful
  */
 async function injectContentScript(tabId) {
   return new Promise((resolve, reject) => {
@@ -229,7 +229,7 @@ async function injectContentScript(tabId) {
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message));
       } else {
-        // Cho content script thời gian để khởi chạy
+        // Give content script time to initialize
         setTimeout(resolve, 300);
       }
     });
