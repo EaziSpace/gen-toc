@@ -20,17 +20,13 @@ const CONFIG = {
   USER_INTERACTION_THRESHOLD: 1000,
   // List of allowed domains (add your domains here)
   ALLOWED_DOMAINS: [
-    'wikipedia.org',
-    'docs.google.com',
-    'github.com',
-    'medium.com',
-    'dev.to'
-    // Add more domains as needed
+    'chatgpt.com',
+    'gemini.google.com',
+    'grok.com'
   ],
   // List of allowed URL patterns (regex strings)
   ALLOWED_URL_PATTERNS: [
-    '.*\\.pdf',
-    'docs\\..*',
+    // 'docs\\..*',
     'blog\\..*'
     // Add more patterns as needed
   ]
