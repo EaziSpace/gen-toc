@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Any TOC",
+  "name": "Gen TOC",
   "version": "1.0.0",
   "description": "Automatically generates a Table of Contents for any website",
   "icons": {

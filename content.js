@@ -144,6 +144,72 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 /**
+ * Refreshes the TOC content
+ */
+window.refreshTOC = function(force = false) {
+  const tocList = document.getElementById('any-toc-list');
+  const loadingElement = document.getElementById('any-toc-loading');
+  const noHeadingsElement = document.getElementById('any-toc-no-headings');
+  
+  if (!tocList || !loadingElement || !noHeadingsElement) {
+    console.error('TOC elements not found, cannot refresh');
+    return;
+  }
+  
+  // Use throttling to prevent too many refreshes
+  if (!force && window.lastRefreshTime) {
+    const now = Date.now();
+    const elapsed = now - window.lastRefreshTime;
+    if (elapsed < 500) { // Minimum 500ms between refreshes unless forced
+      console.log('Refresh throttled, skipping (last refresh was ' + elapsed + 'ms ago)');
+      return;
+    }
+  }
+  
+  window.lastRefreshTime = Date.now();
+  
+  // Clear existing content
+  tocList.innerHTML = '';
+  loadingElement.style.display = 'block';
+  noHeadingsElement.style.display = 'none';
+  
+  console.log('Refreshing TOC - scanning for headings');
+  // Get headings and build TOC
+  const headings = extractHeadings();
+  
+  if (headings && headings.length > 0) {
+    console.log(`Found ${headings.length} headings, building TOC`);
+    buildTOC(headings);
+    return true;
+  } else {
+    console.log('No headings found on initial scan, will retry after delay');
+    // Try again after a delay if no headings found initially
+    setTimeout(() => {
+      console.log('Retrying heading extraction');
+      const retryHeadings = extractHeadings();
+      if (retryHeadings && retryHeadings.length > 0) {
+        console.log(`Found ${retryHeadings.length} headings on retry, building TOC`);
+        buildTOC(retryHeadings);
+      } else {
+        console.log('No headings found after retry');
+        loadingElement.style.display = 'none';
+        noHeadingsElement.style.display = 'block';
+      }
+    }, 1500); // 1.5 second delay for retry
+    return false;
+  }
+};
+
+// Add a delayed refresh function to the window object
+window.delayedRefreshTOC = function() {
+  console.log('Scheduling delayed TOC refresh');
+  setTimeout(() => {
+    console.log('Executing delayed TOC refresh');
+    refreshTOC();
+  }, 1000);
+};
+
+/**
  * Creates and injects the TOC sidebar
  */
 function initTOC() {
@@ -266,9 +332,9 @@ function initTOC() {
     
     // Style is now loaded from content.css
     
-    // Load the TOC content
-    console.log('Loading TOC content');
-    refreshTOC();
+    // Load the TOC content with a slight delay to ensure DOM is ready
+    console.log('Loading TOC content with a delay');
+    delayedRefreshTOC();
     
     // Save position preference if set
     const position = localStorage.getItem('any-toc-position');
@@ -289,11 +355,103 @@ function initTOC() {
       collapsedButton.classList.remove('visible');
     }
     
+    // Setup mutation observer to detect content changes
+    setupContentChangeDetection();
+    
+    // Setup automatic periodic refresh every 2 seconds
+    setupPeriodicRefresh();
+    
     console.log('TOC initialization completed successfully');
     window.isInitialized = true;
     
+    // Add an additional delayed refresh to handle dynamic content
+    setTimeout(() => {
+      console.log('Executing final delayed refresh to catch late-loaded content');
+      refreshTOC();
+    }, 3000);
+    
   } catch (error) {
     console.error('Error initializing TOC:', error);
+  }
+}
+
+/**
+ * Sets up automatic periodic refresh for the TOC
+ */
+function setupPeriodicRefresh() {
+  console.log('Setting up periodic TOC refresh every 2 seconds');
+  
+  // Store the interval ID so we can clear it if needed
+  window.tocRefreshInterval = setInterval(() => {
+    const tocSidebar = document.getElementById('any-toc-sidebar');
+    
+    // Check if user is currently interacting with the TOC
+    if (window.isUserInteractingWithTOC) {
+      console.log('User is interacting with TOC, skipping auto-refresh');
+      return;
+    }
+    
+    // Only refresh if the sidebar exists and is visible
+    if (tocSidebar && !tocSidebar.classList.contains('hidden')) {
+      // Check if page content has actually changed since last refresh
+      const currentBodyHTML = document.body.innerHTML.length;
+      
+      if (!window.lastBodyLength || Math.abs(currentBodyHTML - window.lastBodyLength) > 50) {
+        console.log('Page content changed, auto-refresh triggered');
+        window.lastBodyLength = currentBodyHTML;
+        refreshTOC();
+      } else {
+        console.log('Page content unchanged, skipping auto-refresh');
+      }
+    } else {
+      console.log('Auto-refresh skipped, TOC is hidden or not initialized');
+    }
+  }, 2000);
+  
+  // Add event listener to pause refresh interval when tab becomes inactive
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      // Tab is inactive, clear the interval to save resources
+      if (window.tocRefreshInterval) {
+        console.log('Tab inactive, pausing TOC refresh interval');
+        clearInterval(window.tocRefreshInterval);
+        window.tocRefreshInterval = null;
+      }
+    } else {
+      // Tab is active again, restart the interval if it was cleared
+      if (!window.tocRefreshInterval) {
+        console.log('Tab active again, resuming TOC refresh interval');
+        setupPeriodicRefresh();
+      }
+    }
+  });
+  
+  // Set up event listeners to detect user interaction with TOC
+  const tocSidebar = document.getElementById('any-toc-sidebar');
+  if (tocSidebar) {
+    tocSidebar.addEventListener('mouseenter', () => {
+      window.isUserInteractingWithTOC = true;
+    });
+    
+    tocSidebar.addEventListener('mouseleave', () => {
+      window.isUserInteractingWithTOC = false;
+    });
+    
+    // Also track clicks to prevent refresh while user is clicking
+    tocSidebar.addEventListener('mousedown', () => {
+      window.isUserInteractingWithTOC = true;
+      // Set a timeout to reset after a while in case mouseup isn't caught
+      setTimeout(() => {
+        window.isUserInteractingWithTOC = false;
+      }, 5000);
+    });
+    
+    tocSidebar.addEventListener('mouseup', () => {
+      // Small delay to complete the click action
+      setTimeout(() => {
+        window.isUserInteractingWithTOC = false;
+      }, 500);
+    });
   }
 }
 
@@ -319,6 +477,9 @@ window.toggleTOCSidebar = function() {
     tocSidebar.classList.remove('hidden');
     collapsedButton.classList.remove('visible');
     localStorage.setItem('any-toc-visibility', 'visible');
+    
+    // Immediately refresh the TOC when showing it
+    refreshTOC();
   } else {
     console.log('Hiding sidebar');
     tocSidebar.classList.add('hidden');
@@ -379,30 +540,6 @@ window.setPosition = function(position) {
 };
 
 /**
- * Refreshes the TOC content
- */
-window.refreshTOC = function() {
-  const tocList = document.getElementById('any-toc-list');
-  const loadingElement = document.getElementById('any-toc-loading');
-  const noHeadingsElement = document.getElementById('any-toc-no-headings');
-  
-  // Clear existing content
-  tocList.innerHTML = '';
-  loadingElement.style.display = 'block';
-  noHeadingsElement.style.display = 'none';
-  
-  // Get headings and build TOC
-  const headings = extractHeadings();
-  
-  if (headings && headings.length > 0) {
-    buildTOC(headings);
-  } else {
-    loadingElement.style.display = 'none';
-    noHeadingsElement.style.display = 'block';
-  }
-};
-
-/**
  * Builds the TOC from the extracted headings
  * @param {Array} headings - Array of heading objects
  */
@@ -432,21 +569,58 @@ function buildTOC(headings) {
 }
 
 /**
- * Extracts all h1, h2, h3 headings from the #main element
+ * Extracts all h1, h2, h3 headings from the page
  * @returns {Array} An array of heading objects containing text, level, and position
  */
 window.extractHeadings = function() {
   const headings = [];
   
-  // Find the main container, fallback to document body if not found
-  const mainContainer = document.getElementById('main') || document.body;
+  // Look in multiple possible content containers
+  const containers = [
+    document.getElementById('main'),
+    document.getElementById('content'),
+    document.getElementById('article'),
+    document.querySelector('article'),
+    document.querySelector('main'),
+    document.querySelector('.content'),
+    document.querySelector('.article'),
+    document.body // Fallback to body if none of the above are found
+  ];
   
-  // Find all h1, h2, h3 elements inside the main container
-  const headingElements = mainContainer.querySelectorAll('h1, h2, h3');
+  // Find the first non-null container
+  let mainContainer = null;
+  for (const container of containers) {
+    if (container) {
+      mainContainer = container;
+      console.log('Found content container:', container.tagName, container.id || container.className);
+      break;
+    }
+  }
   
-  // If no headings are found, return empty array
+  if (!mainContainer) {
+    console.error('Could not find any valid content container');
+    mainContainer = document.body;
+  }
+  
+  // Find all h1, h2, h3, h4 elements inside the main container
+  console.log('Searching for headings in container');
+  let headingElements = mainContainer.querySelectorAll('h1, h2, h3, h4');
+  
+  // If no headings are found in the main container, try the entire document
   if (headingElements.length === 0) {
-    return headings;
+    console.log('No headings found in main container, searching entire document');
+    const allHeadings = document.querySelectorAll('h1, h2, h3, h4');
+    
+    if (allHeadings.length === 0) {
+      console.log('No headings found in entire document');
+      return headings;
+    }
+    
+    // Use all headings from the document
+    console.log(`Found ${allHeadings.length} headings in document`);
+    headingElements = allHeadings;
+  } else {
+    console.log(`Found ${headingElements.length} headings in main container`);
   }
   
   // Extract information from each heading
@@ -455,7 +629,10 @@ window.extractHeadings = function() {
     const text = heading.textContent.trim();
     
     // Skip empty headings
-    if (!text) return;
+    if (!text) {
+      console.log('Skipping empty heading');
+      return;
+    }
     
     // Extract the heading level from the tag name (h1 -> 1, h2 -> 2, etc.)
     const level = parseInt(heading.tagName.substring(1), 10);
@@ -475,8 +652,11 @@ window.extractHeadings = function() {
       id: heading.id,
       position
     });
+    
+    console.log(`Added heading: ${text.substring(0, 30)}${text.length > 30 ? '...' : ''} (h${level})`);
   });
   
+  console.log(`Total headings extracted: ${headings.length}`);
   return headings;
 };
 
@@ -527,4 +707,68 @@ function getCurrentPosition() {
   
   // If sidebar is not visible, check the saved position
   return localStorage.getItem('any-toc-position') || 'right';
+}
+
+/**
+ * Sets up a mutation observer to detect content changes and refresh TOC
+ */
+function setupContentChangeDetection() {
+  console.log('Setting up mutation observer for content changes');
+  
+  // Create a throttled refresh function to avoid excessive updates
+  let refreshTimeout = null;
+  const throttledRefresh = () => {
+    if (refreshTimeout) {
+      clearTimeout(refreshTimeout);
+    }
+    refreshTimeout = setTimeout(() => {
+      console.log('Content changed, refreshing TOC');
+      refreshTOC();
+    }, 2000); // Wait 2 seconds after changes before refreshing
+  };
+  
+  // Create mutation observer
+  const observer = new MutationObserver((mutations) => {
+    // Check if any of the mutations might affect headings
+    const hasRelevantChanges = mutations.some(mutation => {
+      // Check for added/removed nodes that might be or contain headings
+      if (mutation.type === 'childList') {
+        // Check added nodes
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            // If the node is a heading or contains headings
+            if (/^H[1-4]$/i.test(node.tagName) || node.querySelector('h1, h2, h3, h4')) {
+              console.log('Detected new heading content');
+              return true;
+            }
+          }
+        }
+        
+        // Check if removed nodes contained headings
+        for (const node of mutation.removedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            if (/^H[1-4]$/i.test(node.tagName) || 
+                (node.querySelector && node.querySelector('h1, h2, h3, h4'))) {
+              console.log('Detected removed heading content');
+              return true;
+            }
+          }
+        }
+      }
+      
+      return false;
+    });
+    
+    if (hasRelevantChanges) {
+      throttledRefresh();
+    }
+  });
+  
+  // Start observing the document body
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+  
+  console.log('Mutation observer setup complete');
 } 
