@@ -14,6 +14,28 @@ const ACTIONS = {
   GET_POSITION: 'getPosition'
 };
 
+// Ensure global namespace availability
+window.anyTOC = window.anyTOC || {};
+
+// Define core functions early to ensure they're available
+function refreshTOC(force = false) {
+  try {
+    // Will be replaced by the full implementation later
+    if (window.refreshTOC && window.refreshTOC !== refreshTOC) {
+      return window.refreshTOC(force);
+    }
+    console.log('refreshTOC stub called - will be replaced by full implementation');
+    return false;
+  } catch (e) {
+    console.error('Error in refreshTOC stub:', e);
+    return false;
+  }
+}
+
+// Ensure global functions are available
+window.refreshTOC = window.refreshTOC || refreshTOC;
+window.anyTOC.refreshTOC = window.refreshTOC;
+
 // Setup variables to control initialization
 window.isInitialized = false;
 let initTocTimeout;
@@ -44,7 +66,14 @@ setInterval(sendPingToBackground, 10000);
  */
 function sendPingToBackground() {
   try {
+    // Check if chrome and chrome.runtime are available
+    if (typeof chrome === 'undefined' || !chrome || !chrome.runtime) {
+      console.log('Chrome runtime unavailable, extension context may be invalid');
+      return;
+    }
+    
     chrome.runtime.sendMessage({ action: ACTIONS.PING }, (response) => {
+      // Check again here in case context was invalidated during the async call
       if (chrome.runtime.lastError) {
         console.warn('Error sending ping to background:', chrome.runtime.lastError);
       } else {
@@ -62,13 +91,38 @@ function sendPingToBackground() {
 function initOnDOMContentLoaded() {
   console.log('DOM content loaded, initializing TOC');
   try {
+    // Check if extension context is valid - more comprehensive check
+    if (typeof chrome === 'undefined' || !chrome || !chrome.runtime) {
+      console.error('Chrome runtime not available, extension context may be invalid');
+      return;
+    }
+    
     initTOC();
+    
+    // Ensure periodic refresh is set up
+    try {
+      if (typeof setupPeriodicRefresh === 'function') {
+        setupPeriodicRefresh();
+      }
+    } catch (e) {
+      console.error('Error setting up periodic refresh:', e);
+    }
     
     // Try again after a delay if not successful
     initTocTimeout = setTimeout(() => {
       console.log('Timeout fired, initializing TOC again');
       try {
+        // Check extension context again before retry
+        if (typeof chrome === 'undefined' || !chrome || !chrome.runtime) {
+          console.error('Chrome runtime not available on retry, extension context may be invalid');
+          return;
+        }
         initTOC();
+        
+        // Second attempt to set up periodic refresh
+        if (typeof setupPeriodicRefresh === 'function' && !window.tocRefreshInterval) {
+          setupPeriodicRefresh();
+        }
       } catch (e) {
         console.error('Error initializing TOC on timeout:', e);
       }
@@ -78,135 +132,142 @@ function initOnDOMContentLoaded() {
   }
 }
 
-// Listen for messages from popup or background script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Message received in content script:', message);
-  console.log('Message action type:', typeof message.action);
-  console.log('Message action value:', message.action);
-  console.log('Comparing with TOGGLE:', message.action === ACTIONS.TOGGLE);
-  console.log('Comparing with REFRESH:', message.action === ACTIONS.REFRESH);
-  
-  try {
-    // Handle ping from background script to check connection
-    if (message.action === ACTIONS.PING) {
-      console.log('Received ping in content script');
-      sendResponse({ pong: true });
-      return true;
+// Listen for messages from popup or background script - more comprehensive check
+if (typeof chrome !== 'undefined' && chrome && chrome.runtime && chrome.runtime.onMessage) {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('Message received in content script:', message);
+    console.log('Message action type:', typeof message.action);
+    console.log('Message action value:', message.action);
+    console.log('Comparing with TOGGLE:', message.action === ACTIONS.TOGGLE);
+    console.log('Comparing with REFRESH:', message.action === ACTIONS.REFRESH);
+    
+    try {
+      // Handle ping from background script to check connection
+      if (message.action === ACTIONS.PING) {
+        console.log('Received ping in content script');
+        sendResponse({ pong: true });
+        return true;
+      }
+      
+      switch (message.action) {
+        case ACTIONS.GET_HEADINGS:
+          const headings = extractHeadings();
+          sendResponse(headings);
+          break;
+        
+        case ACTIONS.SCROLL_TO_HEADING:
+          scrollToHeading(message.id, message.position);
+          sendResponse({ success: true });
+          break;
+        
+        case ACTIONS.TOGGLE:
+          console.log('Toggle TOC message received');
+          console.log('Toggle action matched successfully');
+          toggleTOCSidebar();
+          sendResponse({ success: true });
+          break;
+        
+        case ACTIONS.REFRESH:
+          console.log('Refresh TOC message received');
+          console.log('Refresh action matched successfully');
+          refreshTOC();
+          sendResponse({ success: true });
+          break;
+        
+        case ACTIONS.SET_POSITION:
+          console.log('Set position message received:', message.position);
+          setPosition(message.position);
+          sendResponse({ success: true });
+          break;
+        
+        case ACTIONS.GET_POSITION:
+          console.log('Get position message received');
+          const position = getCurrentPosition();
+          sendResponse({ position: position });
+          break;
+        
+        default:
+          console.warn('Unknown action:', message.action);
+          sendResponse({ error: 'Unknown action' });
+      }
+    } catch (e) {
+      console.error('Error handling message:', e);
+      sendResponse({ error: e.message });
     }
     
-    switch (message.action) {
-      case ACTIONS.GET_HEADINGS:
-        const headings = extractHeadings();
-        sendResponse(headings);
-        break;
-        
-      case ACTIONS.SCROLL_TO_HEADING:
-        scrollToHeading(message.id, message.position);
-        sendResponse({ success: true });
-        break;
-        
-      case ACTIONS.TOGGLE:
-        console.log('Toggle TOC message received');
-        console.log('Toggle action matched successfully');
-        toggleTOCSidebar();
-        sendResponse({ success: true });
-        break;
-        
-      case ACTIONS.REFRESH:
-        console.log('Refresh TOC message received');
-        console.log('Refresh action matched successfully');
-        refreshTOC();
-        sendResponse({ success: true });
-        break;
-        
-      case ACTIONS.SET_POSITION:
-        console.log('Set position message received:', message.position);
-        setPosition(message.position);
-        sendResponse({ success: true });
-        break;
-        
-      case ACTIONS.GET_POSITION:
-        console.log('Get position message received');
-        const position = getCurrentPosition();
-        sendResponse({ position: position });
-        break;
-        
-      default:
-        console.warn('Unknown action:', message.action);
-        sendResponse({ error: 'Unknown action' });
-    }
-  } catch (e) {
-    console.error('Error handling message:', e);
-    sendResponse({ error: e.message });
-  }
-  
-  return true; // Keep connection open to ensure sendResponse works
-});
+    return true; // Keep connection open to ensure sendResponse works
+  });
+}
 
 /**
  * Refreshes the TOC content
  */
 window.refreshTOC = function(force = false) {
-  const tocList = document.getElementById('any-toc-list');
-  const loadingElement = document.getElementById('any-toc-loading');
-  const noHeadingsElement = document.getElementById('any-toc-no-headings');
-  
-  if (!tocList || !loadingElement || !noHeadingsElement) {
-    console.error('TOC elements not found, cannot refresh');
-    return;
-  }
-  
-  // Use throttling to prevent too many refreshes
-  if (!force && window.lastRefreshTime) {
-    const now = Date.now();
-    const elapsed = now - window.lastRefreshTime;
-    if (elapsed < 500) { // Minimum 500ms between refreshes unless forced
-      console.log('Refresh throttled, skipping (last refresh was ' + elapsed + 'ms ago)');
+  try {
+    const tocList = document.getElementById('any-toc-list');
+    const loadingElement = document.getElementById('any-toc-loading');
+    const noHeadingsElement = document.getElementById('any-toc-no-headings');
+    
+    // Ensure the function is defined and available as a window property
+    window.refreshTOC = window.refreshTOC || this;
+    
+    if (!tocList || !loadingElement || !noHeadingsElement) {
+      console.error('TOC elements not found, cannot refresh');
       return;
     }
-  }
-  
-  window.lastRefreshTime = Date.now();
-  
-  // Clear existing content
-  tocList.innerHTML = '';
-  loadingElement.style.display = 'block';
-  noHeadingsElement.style.display = 'none';
-  
-  console.log('Refreshing TOC - scanning for headings');
-  // Get headings and build TOC
-  const headings = extractHeadings();
-  
-  if (headings && headings.length > 0) {
-    console.log(`Found ${headings.length} headings, building TOC`);
-    buildTOC(headings);
-    return true;
-  } else {
-    console.log('No headings found on initial scan, will retry after delay');
-    // Try again after a delay if no headings found initially
-    setTimeout(() => {
-      console.log('Retrying heading extraction');
-      const retryHeadings = extractHeadings();
-      if (retryHeadings && retryHeadings.length > 0) {
-        console.log(`Found ${retryHeadings.length} headings on retry, building TOC`);
-        buildTOC(retryHeadings);
-      } else {
-        console.log('No headings found after retry');
-        loadingElement.style.display = 'none';
-        noHeadingsElement.style.display = 'block';
+    
+    // Use throttling to prevent too many refreshes
+    if (!force && window.lastRefreshTime) {
+      const now = Date.now();
+      const elapsed = now - window.lastRefreshTime;
+      if (elapsed < 500) { // Minimum 500ms between refreshes unless forced
+        console.log('Refresh throttled, skipping (last refresh was ' + elapsed + 'ms ago)');
+        return;
       }
-    }, 1500); // 1.5 second delay for retry
+    }
+    
+    window.lastRefreshTime = Date.now();
+    
+    // Clear existing content
+    tocList.innerHTML = '';
+    loadingElement.style.display = 'block';
+    noHeadingsElement.style.display = 'none';
+    
+    console.log('Refreshing TOC - scanning for headings');
+    // Get headings and build TOC
+    const headings = extractHeadings();
+    
+    if (headings && headings.length > 0) {
+      console.log(`Found ${headings.length} headings, building TOC`);
+      buildTOC(headings);
+      return true;
+    } else {
+      console.log('No headings found on initial scan, will retry after delay');
+      // Try again after a delay if no headings found initially
+      setTimeout(() => {
+        try {
+          console.log('Retrying heading extraction');
+          const retryHeadings = extractHeadings();
+          if (retryHeadings && retryHeadings.length > 0) {
+            console.log(`Found ${retryHeadings.length} headings on retry, building TOC`);
+            buildTOC(retryHeadings);
+          } else {
+            console.log('No headings found after retry');
+            if (loadingElement && noHeadingsElement) {
+              loadingElement.style.display = 'none';
+              noHeadingsElement.style.display = 'block';
+            }
+          }
+        } catch (e) {
+          console.error('Error during delayed heading extraction:', e);
+        }
+      }, 1500); // 1.5 second delay for retry
+      return false;
+    }
+  } catch (e) {
+    console.error('Error in refreshTOC:', e);
     return false;
   }
-};
-
-// Add a delayed refresh function to the window object
-window.delayedRefreshTOC = function() {
-  console.log('Scheduling delayed TOC refresh');
-  setTimeout(() => {
-    console.log('Executing delayed TOC refresh');
-    refreshTOC();
-  }, 1000);
 };
 
 /**
@@ -329,12 +390,7 @@ function initTOC() {
     console.log('Appending TOC elements to document body');
     document.body.appendChild(tocSidebar);
     document.body.appendChild(collapsedButton);
-    
-    // Style is now loaded from content.css
-    
-    // Load the TOC content with a slight delay to ensure DOM is ready
-    console.log('Loading TOC content with a delay');
-    delayedRefreshTOC();
+  
     
     // Save position preference if set
     const position = localStorage.getItem('any-toc-position');
@@ -381,32 +437,45 @@ function initTOC() {
 function setupPeriodicRefresh() {
   console.log('Setting up periodic TOC refresh every 2 seconds');
   
+  // Clear any existing interval to avoid duplicates
+  if (window.tocRefreshInterval) {
+    clearInterval(window.tocRefreshInterval);
+  }
+  
   // Store the interval ID so we can clear it if needed
   window.tocRefreshInterval = setInterval(() => {
-    const tocSidebar = document.getElementById('any-toc-sidebar');
-    
-    // Check if user is currently interacting with the TOC
-    if (window.isUserInteractingWithTOC) {
-      console.log('User is interacting with TOC, skipping auto-refresh');
-      return;
-    }
-    
-    // Only refresh if the sidebar exists and is visible
-    if (tocSidebar && !tocSidebar.classList.contains('hidden')) {
-      // Check if page content has actually changed since last refresh
-      const currentBodyHTML = document.body.innerHTML.length;
+    try {
+      const tocSidebar = document.getElementById('any-toc-sidebar');
       
-      if (!window.lastBodyLength || Math.abs(currentBodyHTML - window.lastBodyLength) > 50) {
-        console.log('Page content changed, auto-refresh triggered');
-        window.lastBodyLength = currentBodyHTML;
-        refreshTOC();
-      } else {
-        console.log('Page content unchanged, skipping auto-refresh');
+      // Check if user is currently interacting with the TOC
+      if (window.isUserInteractingWithTOC) {
+        console.log('User is interacting with TOC, skipping auto-refresh');
+        return;
       }
-    } else {
-      console.log('Auto-refresh skipped, TOC is hidden or not initialized');
+      
+      // Only refresh if the sidebar exists and is visible
+      if (tocSidebar && !tocSidebar.classList.contains('hidden')) {
+        // Check if page content has actually changed since last refresh
+        const currentBodyHTML = document.body.innerHTML.length;
+        
+        if (!window.lastBodyLength || Math.abs(currentBodyHTML - window.lastBodyLength) > 50) {
+          console.log('Page content changed, auto-refresh triggered');
+          window.lastBodyLength = currentBodyHTML;
+          if (typeof refreshTOC === 'function') {
+            refreshTOC();
+          } else if (window.refreshTOC && typeof window.refreshTOC === 'function') {
+            window.refreshTOC();
+          }
+        } else {
+          console.log('Page content unchanged, skipping auto-refresh');
+        }
+      } else {
+        console.log('Auto-refresh skipped, TOC is hidden or not initialized');
+      }
+    } catch (e) {
+      console.error('Error during periodic refresh:', e);
     }
-  }, 2000);
+  }, 2000); // Refresh every 2 seconds
   
   // Add event listener to pause refresh interval when tab becomes inactive
   document.addEventListener('visibilitychange', () => {
@@ -479,12 +548,27 @@ window.toggleTOCSidebar = function() {
     localStorage.setItem('any-toc-visibility', 'visible');
     
     // Immediately refresh the TOC when showing it
-    refreshTOC();
+    if (typeof refreshTOC === 'function') {
+      refreshTOC(true); // Force refresh
+    } else if (window.refreshTOC && typeof window.refreshTOC === 'function') {
+      window.refreshTOC(true); // Force refresh
+    }
+    
+    // Make sure periodic refresh is running
+    if (!window.tocRefreshInterval && typeof setupPeriodicRefresh === 'function') {
+      setupPeriodicRefresh();
+    }
   } else {
     console.log('Hiding sidebar');
     tocSidebar.classList.add('hidden');
     collapsedButton.classList.add('visible');
     localStorage.setItem('any-toc-visibility', 'hidden');
+    
+    // No need to constantly refresh when hidden, can optionally clear interval here
+    // if (window.tocRefreshInterval) {
+    //   clearInterval(window.tocRefreshInterval);
+    //   window.tocRefreshInterval = null;
+    // }
   }
 };
 
