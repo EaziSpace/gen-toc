@@ -10,6 +10,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const toggleButton = document.getElementById('toggle-toc');
   const leftPositionButton = document.getElementById('position-left');
   const rightPositionButton = document.getElementById('position-right');
+  const pageStatusText = document.getElementById('page-status');
+  const allowPageButton = document.getElementById('allow-page');
+  const disallowPageButton = document.getElementById('disallow-page');
   
   // Set initial status
   updateStatus('Checking content script status...');
@@ -20,10 +23,18 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(result => {
         if (result && result.success) {
           updateStatus('Content script is active');
-          enableControls();
           
-          // Check current position and update UI
-          checkTOCPosition(tab.id);
+          // Check if page is allowed to use TOC
+          if (result.allowed) {
+            enableControls();
+            updatePageStatus(true);
+            
+            // Check current position and update UI
+            checkTOCPosition(tab.id);
+          } else {
+            disableControls();
+            updatePageStatus(false);
+          }
         } else {
           throw new Error('Content script not detected');
         }
@@ -32,6 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Error checking content script status:', error);
         updateStatus('Content script not active', true);
         disableControls();
+        updatePageStatus(false, false);
       });
   });
   
@@ -111,6 +123,56 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
   
+  // Handle allow page button click
+  allowPageButton.addEventListener('click', function() {
+    getCurrentTab().then(tab => {
+      chrome.tabs.sendMessage(tab.id, {
+        action: 'callFunction',
+        functionName: 'addCurrentDomainToAllowList'
+      }).then(response => {
+        if (response && response.success) {
+          pageStatusText.textContent = 'Page will be allowed after reload';
+          pageStatusText.className = 'success';
+          setTimeout(() => {
+            chrome.tabs.reload(tab.id);
+          }, 1000);
+        } else {
+          pageStatusText.textContent = 'Failed to add page to allowed list';
+          pageStatusText.className = 'error';
+        }
+      }).catch(error => {
+        console.error('Error allowing page:', error);
+        pageStatusText.textContent = 'Error updating page permissions';
+        pageStatusText.className = 'error';
+      });
+    });
+  });
+  
+  // Handle disallow page button click
+  disallowPageButton.addEventListener('click', function() {
+    getCurrentTab().then(tab => {
+      chrome.tabs.sendMessage(tab.id, {
+        action: 'callFunction',
+        functionName: 'removeCurrentDomainFromAllowList'
+      }).then(response => {
+        if (response && response.success) {
+          pageStatusText.textContent = 'Page will be disallowed after reload';
+          pageStatusText.className = 'success';
+          setTimeout(() => {
+            chrome.tabs.reload(tab.id);
+          }, 1000);
+        } else {
+          pageStatusText.textContent = 'Failed to remove page from allowed list';
+          pageStatusText.className = 'error';
+        }
+      }).catch(error => {
+        console.error('Error disallowing page:', error);
+        pageStatusText.textContent = 'Error updating page permissions';
+        pageStatusText.className = 'error';
+      });
+    });
+  });
+  
   /**
    * Enables all control buttons
    */
@@ -155,6 +217,33 @@ document.addEventListener('DOMContentLoaded', function() {
       leftPositionButton.classList.remove('active');
     });
   }
+  
+  /**
+   * Updates the page status text and buttons based on whether the page is allowed
+   * @param {boolean} isAllowed - Whether the page is allowed to use TOC
+   * @param {boolean} scriptActive - Whether the content script is active
+   */
+  function updatePageStatus(isAllowed, scriptActive = true) {
+    if (!scriptActive) {
+      pageStatusText.textContent = 'Content script not active on this page';
+      pageStatusText.className = 'error';
+      allowPageButton.classList.add('hidden');
+      disallowPageButton.classList.add('hidden');
+      return;
+    }
+    
+    if (isAllowed) {
+      pageStatusText.textContent = 'TOC is enabled on this page';
+      pageStatusText.className = 'success';
+      allowPageButton.classList.add('hidden');
+      disallowPageButton.classList.remove('hidden');
+    } else {
+      pageStatusText.textContent = 'TOC is disabled on this page';
+      pageStatusText.className = '';
+      allowPageButton.classList.remove('hidden');
+      disallowPageButton.classList.add('hidden');
+    }
+  }
 });
 
 /**
@@ -186,7 +275,11 @@ function checkContentScriptAndExecuteAction(tabId, action) {
       chrome.tabs.sendMessage(tabId, { action: 'ping' })
         .then(response => {
           if (response && response.pong) {
-            resolve({ success: true });
+            // Include information about whether the page is allowed
+            resolve({ 
+              success: true, 
+              allowed: response.allowed || false 
+            });
           } else {
             throw new Error('No valid response from content script');
           }
@@ -202,7 +295,11 @@ function checkContentScriptAndExecuteAction(tabId, action) {
                 chrome.tabs.sendMessage(tabId, { action: 'ping' })
                   .then(response => {
                     if (response && response.pong) {
-                      resolve({ success: true });
+                      // Include information about whether the page is allowed
+                      resolve({ 
+                        success: true, 
+                        allowed: response.allowed || false
+                      });
                     } else {
                       throw new Error('No valid response after injection');
                     }
@@ -217,6 +314,15 @@ function checkContentScriptAndExecuteAction(tabId, action) {
               console.error('Content script injection failed:', injectionError);
               reject(new Error('Failed to inject content script'));
             });
+        });
+    } else if (action === 'callFunction') {
+      // Special case to call functions on the window object
+      executeContentScriptFunction(tabId, arguments[2])
+        .then(result => {
+          resolve({ success: true, result });
+        })
+        .catch(error => {
+          reject(error);
         });
     } else {
       // For other actions, use the legacy approach until fully migrated
@@ -263,6 +369,31 @@ function executeContentScriptAction(tabId, action, args = []) {
     },
     args: [action, args]
   }).then(results => results[0].result);
+}
+
+/**
+ * Executes a function on the window object in the content script
+ * @param {number} tabId - The ID of the tab to execute in
+ * @param {string} functionName - The name of the function to call on window object
+ * @param {Array} args - Arguments for the function
+ * @returns {Promise<any>} Promise that resolves with the function result
+ */
+function executeContentScriptFunction(tabId, functionName, args = []) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.tabs.sendMessage(tabId, {
+        action: 'callFunction',
+        functionName: functionName,
+        args: args
+      }).then(response => {
+        resolve(response);
+      }).catch(error => {
+        reject(error);
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 /**

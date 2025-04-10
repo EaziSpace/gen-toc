@@ -14,6 +14,83 @@ const ACTIONS = {
   GET_POSITION: 'getPosition'
 };
 
+// Configuration options with defaults
+const CONFIG = {
+  CONTENT_CHANGE_THRESHOLD: 100,
+  USER_INTERACTION_THRESHOLD: 1000,
+  // List of allowed domains (add your domains here)
+  ALLOWED_DOMAINS: [
+    'wikipedia.org',
+    'docs.google.com',
+    'github.com',
+    'medium.com',
+    'dev.to'
+    // Add more domains as needed
+  ],
+  // List of allowed URL patterns (regex strings)
+  ALLOWED_URL_PATTERNS: [
+    '.*\\.pdf',
+    'docs\\..*',
+    'blog\\..*'
+    // Add more patterns as needed
+  ]
+};
+
+/**
+ * Checks if the current page is allowed to use the TOC
+ * @returns {boolean} True if the current page is allowed
+ */
+function isAllowedPage() {
+  const currentURL = window.location.href;
+  const currentDomain = window.location.hostname;
+  
+  console.log('Checking if TOC is allowed on:', currentURL);
+  
+  // Check for allowed domains
+  for (const domain of CONFIG.ALLOWED_DOMAINS) {
+    if (currentDomain.includes(domain)) {
+      console.log('Domain allowed:', domain);
+      return true;
+    }
+  }
+  
+  // Check for allowed URL patterns
+  for (const pattern of CONFIG.ALLOWED_URL_PATTERNS) {
+    const regex = new RegExp(pattern, 'i');
+    if (regex.test(currentURL)) {
+      console.log('URL pattern allowed:', pattern);
+      return true;
+    }
+  }
+  
+  // Allow local files if needed
+  if (currentURL.startsWith('file:///')) {
+    console.log('Local file allowed');
+    return true;
+  }
+  
+  // Try to get custom allowed domains from storage
+  const storedDomains = localStorage.getItem('any-toc-allowed-domains');
+  if (storedDomains) {
+    try {
+      const customDomains = JSON.parse(storedDomains);
+      if (Array.isArray(customDomains)) {
+        for (const domain of customDomains) {
+          if (currentDomain.includes(domain)) {
+            console.log('Custom domain allowed:', domain);
+            return true;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing custom domains:', e);
+    }
+  }
+  
+  console.log('Page not allowed for TOC');
+  return false;
+}
+
 // Try to load stored configuration
 try {
   const storedConfig = localStorage.getItem('any-toc-config');
@@ -59,7 +136,12 @@ sendPingToBackground();
 
 // Run initTOC immediately when content script runs
 try {
-  initTOC();
+  // Only initialize if current page is allowed
+  if (isAllowedPage()) {
+    initTOC();
+  } else {
+    console.log('TOC initialization skipped: page not in allowed list');
+  }
 } catch (e) {
   console.error('Error initializing TOC immediately:', e);
 }
@@ -82,6 +164,11 @@ function sendPingToBackground() {
     // Check if chrome and chrome.runtime are available
     if (typeof chrome === 'undefined' || !chrome || !chrome.runtime) {
       console.log('Chrome runtime unavailable, extension context may be invalid');
+      return;
+    }
+    
+    // Only send ping if current page is allowed
+    if (!isAllowedPage()) {
       return;
     }
     
@@ -140,7 +227,15 @@ function autoRefreshAfterPageLoad() {
  * Initialize TOC when DOM is ready
  */
 function initOnDOMContentLoaded() {
-  console.log('DOM content loaded, initializing TOC');
+  console.log('DOM content loaded, checking if TOC is allowed');
+  
+  // Skip initialization if page is not allowed
+  if (!isAllowedPage()) {
+    console.log('TOC initialization skipped: page not in allowed list');
+    return;
+  }
+  
+  console.log('Page allowed, initializing TOC');
   try {
     // Check if extension context is valid - more comprehensive check
     if (typeof chrome === 'undefined' || !chrome || !chrome.runtime) {
@@ -179,19 +274,60 @@ function initOnDOMContentLoaded() {
 if (typeof chrome !== 'undefined' && chrome && chrome.runtime && chrome.runtime.onMessage) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('Message received in content script:', message);
+    
+    // Always respond to ping messages to let background know we're alive
+    if (message.action === ACTIONS.PING) {
+      console.log('Received ping in content script');
+      sendResponse({ 
+        pong: true,
+        allowed: isAllowedPage() // Let background know if page is allowed
+      });
+      return true;
+    }
+    
+    // Handle function calls from popup
+    if (message.action === 'callFunction') {
+      const functionName = message.functionName;
+      const args = message.args || [];
+      
+      console.log(`Calling function ${functionName} with args:`, args);
+      
+      if (typeof window[functionName] === 'function') {
+        try {
+          const result = window[functionName](...args);
+          console.log(`Function ${functionName} result:`, result);
+          sendResponse({ 
+            success: true, 
+            result: result 
+          });
+        } catch (e) {
+          console.error(`Error calling function ${functionName}:`, e);
+          sendResponse({ 
+            error: e.message 
+          });
+        }
+      } else {
+        console.error(`Function ${functionName} not found in window object`);
+        sendResponse({ 
+          error: `Function ${functionName} not found` 
+        });
+      }
+      return true;
+    }
+    
+    // For all other actions, only respond if page is allowed
+    if (!isAllowedPage()) {
+      console.log('Message action ignored: page not in allowed list');
+      sendResponse({ error: 'TOC not enabled for this page' });
+      return true;
+    }
+    
     console.log('Message action type:', typeof message.action);
     console.log('Message action value:', message.action);
     console.log('Comparing with TOGGLE:', message.action === ACTIONS.TOGGLE);
     console.log('Comparing with REFRESH:', message.action === ACTIONS.REFRESH);
     
     try {
-      // Handle ping from background script to check connection
-      if (message.action === ACTIONS.PING) {
-        console.log('Received ping in content script');
-        sendResponse({ pong: true });
-        return true;
-      }
-      
       switch (message.action) {
         case ACTIONS.GET_HEADINGS:
           const headings = extractHeadings();
@@ -804,4 +940,96 @@ window.setPosition = function(position) {
   }
   
   return position;
+};
+
+/**
+ * Adds the current domain to the allowed list
+ * Can be called from popup
+ */
+window.addCurrentDomainToAllowList = function() {
+  const currentDomain = window.location.hostname;
+  if (!currentDomain) {
+    console.error('Cannot add empty domain to allow list');
+    return false;
+  }
+  
+  let customDomains = [];
+  const storedDomains = localStorage.getItem('any-toc-allowed-domains');
+  
+  if (storedDomains) {
+    try {
+      customDomains = JSON.parse(storedDomains);
+      if (!Array.isArray(customDomains)) {
+        customDomains = [];
+      }
+    } catch (e) {
+      console.error('Error parsing custom domains:', e);
+    }
+  }
+  
+  // Check if domain is already in list
+  if (customDomains.includes(currentDomain)) {
+    console.log('Domain already in allowed list:', currentDomain);
+    return true;
+  }
+  
+  // Add domain to list
+  customDomains.push(currentDomain);
+  localStorage.setItem('any-toc-allowed-domains', JSON.stringify(customDomains));
+  console.log('Added domain to allowed list:', currentDomain);
+  
+  // Reload the page to activate TOC
+  window.location.reload();
+  return true;
+};
+
+/**
+ * Removes the current domain from the allowed list
+ * Can be called from popup
+ */
+window.removeCurrentDomainFromAllowList = function() {
+  const currentDomain = window.location.hostname;
+  if (!currentDomain) {
+    console.error('Cannot remove empty domain from allow list');
+    return false;
+  }
+  
+  let customDomains = [];
+  const storedDomains = localStorage.getItem('any-toc-allowed-domains');
+  
+  if (storedDomains) {
+    try {
+      customDomains = JSON.parse(storedDomains);
+      if (!Array.isArray(customDomains)) {
+        customDomains = [];
+      }
+    } catch (e) {
+      console.error('Error parsing custom domains:', e);
+      return false;
+    }
+  }
+  
+  // Check if domain is in list
+  const index = customDomains.indexOf(currentDomain);
+  if (index === -1) {
+    console.log('Domain not in allowed list:', currentDomain);
+    return false;
+  }
+  
+  // Remove domain from list
+  customDomains.splice(index, 1);
+  localStorage.setItem('any-toc-allowed-domains', JSON.stringify(customDomains));
+  console.log('Removed domain from allowed list:', currentDomain);
+  
+  // Reload the page to deactivate TOC
+  window.location.reload();
+  return true;
+};
+
+/**
+ * Checks if the current domain is in the allowed list
+ * Can be called from popup
+ */
+window.isCurrentDomainAllowed = function() {
+  return isAllowedPage();
 }; 
