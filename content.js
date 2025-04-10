@@ -20,12 +20,20 @@ const CONFIG = {
   USER_INTERACTION_THRESHOLD: 1000,
   // List of allowed domains (add your domains here)
   ALLOWED_DOMAINS: [
-    'chatgpt.com',
-    'openai.com',  // For ChatGPT
-    'grok.com',
-    'gemini.google.com',
+    'wikipedia.org',
+    'docs.google.com',
+    'github.com',
+    'medium.com',
+    'dev.to'
     // Add more domains as needed
   ],
+  // List of allowed URL patterns (regex strings)
+  ALLOWED_URL_PATTERNS: [
+    '.*\\.pdf',
+    'docs\\..*',
+    'blog\\..*'
+    // Add more patterns as needed
+  ]
 };
 
 /**
@@ -38,33 +46,6 @@ function isAllowedPage() {
   
   console.log('Checking if TOC is allowed on:', currentURL);
   
-  // Try to get custom allowed/disabled domains from storage
-  const storedDomains = localStorage.getItem('any-toc-allowed-domains');
-  if (storedDomains) {
-    try {
-      const customDomains = JSON.parse(storedDomains);
-      if (Array.isArray(customDomains)) {
-        // Check if domain is explicitly disabled (prefixed with !)
-        for (const domain of customDomains) {
-          if (domain.startsWith('!') && currentDomain.includes(domain.substring(1))) {
-            console.log('Domain explicitly disabled:', domain.substring(1));
-            return false;
-          }
-        }
-        
-        // Check if domain is explicitly allowed
-        for (const domain of customDomains) {
-          if (!domain.startsWith('!') && currentDomain.includes(domain)) {
-            console.log('Custom domain allowed:', domain);
-            return true;
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Error parsing custom domains:', e);
-    }
-  }
-  
   // Check for allowed domains
   for (const domain of CONFIG.ALLOWED_DOMAINS) {
     if (currentDomain.includes(domain)) {
@@ -73,10 +54,37 @@ function isAllowedPage() {
     }
   }
   
+  // Check for allowed URL patterns
+  for (const pattern of CONFIG.ALLOWED_URL_PATTERNS) {
+    const regex = new RegExp(pattern, 'i');
+    if (regex.test(currentURL)) {
+      console.log('URL pattern allowed:', pattern);
+      return true;
+    }
+  }
+  
   // Allow local files if needed
   if (currentURL.startsWith('file:///')) {
     console.log('Local file allowed');
     return true;
+  }
+  
+  // Try to get custom allowed domains from storage
+  const storedDomains = localStorage.getItem('any-toc-allowed-domains');
+  if (storedDomains) {
+    try {
+      const customDomains = JSON.parse(storedDomains);
+      if (Array.isArray(customDomains)) {
+        for (const domain of customDomains) {
+          if (currentDomain.includes(domain)) {
+            console.log('Custom domain allowed:', domain);
+            return true;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing custom domains:', e);
+    }
   }
   
   console.log('Page not allowed for TOC');
@@ -122,6 +130,10 @@ window.anyTOC.refreshTOC = window.refreshTOC;
 window.isInitialized = false;
 let initTocTimeout;
 
+// Notify that content script has been loaded
+console.log('Content script loaded, sending ping to background');
+sendPingToBackground();
+
 // Run initTOC immediately when content script runs
 try {
   // Only initialize if current page is allowed
@@ -139,6 +151,38 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initOnDOMContentLoaded);
 } else {
   initOnDOMContentLoaded();
+}
+
+// Set periodic ping to ensure background knows we're ready
+setInterval(sendPingToBackground, 10000);
+
+/**
+ * Send ping message to background script
+ */
+function sendPingToBackground() {
+  try {
+    // Check if chrome and chrome.runtime are available
+    if (typeof chrome === 'undefined' || !chrome || !chrome.runtime) {
+      console.log('Chrome runtime unavailable, extension context may be invalid');
+      return;
+    }
+    
+    // Only send ping if current page is allowed
+    if (!isAllowedPage()) {
+      return;
+    }
+    
+    chrome.runtime.sendMessage({ action: ACTIONS.PING }, (response) => {
+      // Check again here in case context was invalidated during the async call
+      if (chrome.runtime.lastError) {
+        console.warn('Error sending ping to background:', chrome.runtime.lastError);
+      } else {
+        console.log('Background responded to ping:', response);
+      }
+    });
+  } catch (e) {
+    console.error('Exception sending ping:', e);
+  }
 }
 
 /**
@@ -968,18 +1012,14 @@ window.removeCurrentDomainFromAllowList = function() {
   // Check if domain is in list
   const index = customDomains.indexOf(currentDomain);
   if (index === -1) {
-    // Domain not in custom list, but might be in default allowed domains
-    // Add a special entry to mark this domain as explicitly disabled
-    // Format: "!domain.com" to indicate it should be disabled
-    customDomains.push('!' + currentDomain);
-    localStorage.setItem('any-toc-allowed-domains', JSON.stringify(customDomains));
-    console.log('Added domain to disabled list:', currentDomain);
-  } else {
-    // Remove domain from list
-    customDomains.splice(index, 1);
-    localStorage.setItem('any-toc-allowed-domains', JSON.stringify(customDomains));
-    console.log('Removed domain from allowed list:', currentDomain);
+    console.log('Domain not in allowed list:', currentDomain);
+    return false;
   }
+  
+  // Remove domain from list
+  customDomains.splice(index, 1);
+  localStorage.setItem('any-toc-allowed-domains', JSON.stringify(customDomains));
+  console.log('Removed domain from allowed list:', currentDomain);
   
   // Reload the page to deactivate TOC
   window.location.reload();

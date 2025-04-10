@@ -65,18 +65,16 @@ document.addEventListener('DOMContentLoaded', function() {
     getCurrentTab().then(tab => {
       console.log('Sending refresh message to tab:', tab.id);
       // Route through the background script for proper action mapping
-      if (chrome.runtime && chrome.runtime.id) {
-        chrome.runtime.sendMessage({
-          action: 'refreshTOC',
-          tabId: tab.id
-        }).then((response) => {
-          console.log('Refresh response:', response);
-          updateStatus('TOC refreshed successfully');
-        }).catch(error => {
-          console.error('Error refreshing TOC:', error);
-          updateStatus('Failed to refresh TOC', true);
-        });
-      }
+      chrome.runtime.sendMessage({
+        action: 'refreshTOC',
+        tabId: tab.id
+      }).then((response) => {
+        console.log('Refresh response:', response);
+        updateStatus('TOC refreshed successfully');
+      }).catch(error => {
+        console.error('Error refreshing TOC:', error);
+        updateStatus('Failed to refresh TOC', true);
+      });
     });
   });
   
@@ -88,18 +86,16 @@ document.addEventListener('DOMContentLoaded', function() {
     getCurrentTab().then(tab => {
       console.log('Sending toggle message to tab:', tab.id);
       // Route through the background script for proper action mapping
-      if (chrome.runtime && chrome.runtime.id) {
-        chrome.runtime.sendMessage({
-          action: 'toggleTOC',
-          tabId: tab.id
-        }).then((response) => {
-          console.log('Toggle response:', response);
-          updateStatus('TOC toggled successfully');
-        }).catch(error => {
-          console.error('Error toggling TOC:', error);
-          updateStatus('Failed to toggle TOC', true);
-        });
-      }
+      chrome.runtime.sendMessage({
+        action: 'toggleTOC',
+        tabId: tab.id
+      }).then((response) => {
+        console.log('Toggle response:', response);
+        updateStatus('TOC toggled successfully');
+      }).catch(error => {
+        console.error('Error toggling TOC:', error);
+        updateStatus('Failed to toggle TOC', true);
+      });
     });
   });
   
