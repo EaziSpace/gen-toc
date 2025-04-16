@@ -771,7 +771,11 @@ window.extractHeadings = function() {
   });
   
   console.log(`Total headings extracted: ${headings.length}`);
-  return headings;
+  // Reverse the array to show headings in reverse order (last heading first)
+  const reversedHeadings = headings.reverse();
+  
+  console.log('Headings (reversed):', JSON.stringify(reversedHeadings));
+  return reversedHeadings;
 };
 
 /**
