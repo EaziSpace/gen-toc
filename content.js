@@ -57,13 +57,13 @@ function isAllowedPage() {
   const currentURL = window.location.href;
   const currentDomain = window.location.hostname;
   
-  console.log('Checking if TOC is allowed on:', currentURL);
-  console.log('Current domain:', currentDomain);
+  // console.log('Checking if TOC is allowed on:', currentURL);
+  // console.log('Current domain:', currentDomain);
   
   // First check if domain is explicitly disallowed
   for (const domain of DISALLOWED_DOMAINS) {
     if (currentDomain.includes(domain)) {
-      console.log('Domain explicitly disallowed:', domain);
+      // console.log('Domain explicitly disallowed:', domain);
       return false;
     }
   }
@@ -71,7 +71,7 @@ function isAllowedPage() {
   // Check for allowed domains
   for (const domain of CONFIG.ALLOWED_DOMAINS) {
     if (currentDomain.includes(domain)) {
-      console.log('Domain allowed from built-in ALLOWED_DOMAINS:', domain);
+      // console.log('Domain allowed from built-in ALLOWED_DOMAINS:', domain);
       return true;
     }
   }
@@ -80,30 +80,30 @@ function isAllowedPage() {
   for (const pattern of CONFIG.ALLOWED_URL_PATTERNS) {
     const regex = new RegExp(pattern, 'i');
     if (regex.test(currentURL)) {
-      console.log('URL pattern allowed:', pattern);
+      // console.log('URL pattern allowed:', pattern);
       return true;
     }
   }
   
   // Allow local files if needed
   if (currentURL.startsWith('file:///')) {
-    console.log('Local file allowed');
+    // console.log('Local file allowed');
     return true;
   }
   
   // Try to get custom allowed domains from storage
   const storedDomains = localStorage.getItem('any-toc-allowed-domains');
-  console.log('Stored domains from localStorage:', storedDomains);
+  // console.log('Stored domains from localStorage:', storedDomains);
   
   if (storedDomains) {
     try {
       const customDomains = JSON.parse(storedDomains);
-      console.log('Parsed custom domains:', customDomains);
+      // console.log('Parsed custom domains:', customDomains);
       
       if (Array.isArray(customDomains)) {
         for (const domain of customDomains) {
           if (currentDomain.includes(domain)) {
-            console.log('Custom domain allowed from localStorage:', domain);
+            // console.log('Custom domain allowed from localStorage:', domain);
             return true;
           }
         }
@@ -113,7 +113,7 @@ function isAllowedPage() {
     }
   }
   
-  console.log('Page not allowed for TOC');
+  // console.log('Page not allowed for TOC');
   return false;
 }
 
@@ -140,7 +140,7 @@ function refreshTOC(force = false) {
     if (window.refreshTOC && window.refreshTOC !== refreshTOC) {
       return window.refreshTOC(force);
     }
-    console.log('refreshTOC stub called - will be replaced by full implementation');
+    // console.log('refreshTOC stub called - will be replaced by full implementation');
     return false;
   } catch (e) {
     console.error('Error in refreshTOC stub:', e);
@@ -157,7 +157,7 @@ window.isInitialized = false;
 let initTocTimeout;
 
 // Notify that content script has been loaded
-console.log('Content script loaded, sending ping to background');
+// console.log('Content script loaded, sending ping to background');
 sendPingToBackground();
 
 // Run initTOC immediately when content script runs
@@ -166,7 +166,7 @@ try {
   if (isAllowedPage()) {
     initTOC();
   } else {
-    console.log('TOC initialization skipped: page not in allowed list');
+    // console.log('TOC initialization skipped: page not in allowed list');
   }
 } catch (e) {
   console.error('Error initializing TOC immediately:', e);
@@ -189,7 +189,7 @@ function sendPingToBackground() {
   try {
     // Check if chrome and chrome.runtime are available
     if (typeof chrome === 'undefined' || !chrome || !chrome.runtime) {
-      console.log('Chrome runtime unavailable, extension context may be invalid');
+      // console.log('Chrome runtime unavailable, extension context may be invalid');
       return;
     }
     
@@ -203,7 +203,7 @@ function sendPingToBackground() {
       if (chrome.runtime.lastError) {
         console.warn('Error sending ping to background:', chrome.runtime.lastError);
       } else {
-        console.log('Background responded to ping:', response);
+        // console.log('Background responded to ping:', response);
       }
     });
   } catch (e) {
@@ -224,23 +224,23 @@ function autoRefreshAfterPageLoad() {
     
     // Stop if we've reached max refreshes or loading element doesn't exist
     if (refreshCount >= maxRefreshes || !loadingElement) {
-      console.log(`Auto-refresh complete: ${refreshCount} refreshes performed`);
+      // console.log(`Auto-refresh complete: ${refreshCount} refreshes performed`);
       return;
     }
     
     // Stop if loading element is hidden (content already loaded)
     if (loadingElement.style.display === 'none') {
-      console.log('Auto-refresh complete: TOC content already loaded');
+      // console.log('Auto-refresh complete: TOC content already loaded');
       return;
     }
     
-    console.log(`Performing auto-refresh ${refreshCount + 1}/${maxRefreshes}`);
+    // console.log(`Performing auto-refresh ${refreshCount + 1}/${maxRefreshes}`);
     refreshTOC(true); // Force refresh
     refreshCount++;
     
     // Schedule next refresh if needed
     if (refreshCount < maxRefreshes) {
-      console.log(`Scheduling next auto-refresh in 5 seconds`);
+      // console.log(`Scheduling next auto-refresh in 5 seconds`);
       setTimeout(performRefresh, 5000);
     }
   }
@@ -253,15 +253,15 @@ function autoRefreshAfterPageLoad() {
  * Initialize TOC when DOM is ready
  */
 function initOnDOMContentLoaded() {
-  console.log('DOM content loaded, checking if TOC is allowed');
+  // console.log('DOM content loaded, checking if TOC is allowed');
   
   // Skip initialization if page is not allowed
   if (!isAllowedPage()) {
-    console.log('TOC initialization skipped: page not in allowed list');
+    // console.log('TOC initialization skipped: page not in allowed list');
     return;
   }
   
-  console.log('Page allowed, initializing TOC');
+  // console.log('Page allowed, initializing TOC');
   try {
     // Check if extension context is valid - more comprehensive check
     if (typeof chrome === 'undefined' || !chrome || !chrome.runtime) {
@@ -276,7 +276,7 @@ function initOnDOMContentLoaded() {
     
     // Try again after a delay if not successful
     initTocTimeout = setTimeout(() => {
-      console.log('Timeout fired, initializing TOC again');
+      // console.log('Timeout fired, initializing TOC again');
       try {
         // Check extension context again before retry
         if (typeof chrome === 'undefined' || !chrome || !chrome.runtime) {
@@ -299,11 +299,11 @@ function initOnDOMContentLoaded() {
 // Listen for messages from popup or background script - more comprehensive check
 if (typeof chrome !== 'undefined' && chrome && chrome.runtime && chrome.runtime.onMessage) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('Message received in content script:', message);
+    // console.log('Message received in content script:', message);
     
     // Always respond to ping messages to let background know we're alive
     if (message.action === ACTIONS.PING) {
-      console.log('Received ping in content script');
+      // console.log('Received ping in content script');
       sendResponse({ 
         pong: true,
         allowed: isAllowedPage() // Let background know if page is allowed
@@ -316,12 +316,12 @@ if (typeof chrome !== 'undefined' && chrome && chrome.runtime && chrome.runtime.
       const functionName = message.functionName;
       const args = message.args || [];
       
-      console.log(`Calling function ${functionName} with args:`, args);
+      // console.log(`Calling function ${functionName} with args:`, args);
       
       if (typeof window[functionName] === 'function') {
         try {
           const result = window[functionName](...args);
-          console.log(`Function ${functionName} result:`, result);
+          // console.log(`Function ${functionName} result:`, result);
           sendResponse({ 
             success: true, 
             result: result 
@@ -343,15 +343,15 @@ if (typeof chrome !== 'undefined' && chrome && chrome.runtime && chrome.runtime.
     
     // For all other actions, only respond if page is allowed
     if (!isAllowedPage()) {
-      console.log('Message action ignored: page not in allowed list');
+      // console.log('Message action ignored: page not in allowed list');
       sendResponse({ error: 'TOC not enabled for this page' });
       return true;
     }
     
-    console.log('Message action type:', typeof message.action);
-    console.log('Message action value:', message.action);
-    console.log('Comparing with TOGGLE:', message.action === ACTIONS.TOGGLE);
-    console.log('Comparing with REFRESH:', message.action === ACTIONS.REFRESH);
+    // console.log('Message action type:', typeof message.action);
+    // console.log('Message action value:', message.action);
+    // console.log('Comparing with TOGGLE:', message.action === ACTIONS.TOGGLE);
+    // console.log('Comparing with REFRESH:', message.action === ACTIONS.REFRESH);
     
     try {
       switch (message.action) {
@@ -366,15 +366,15 @@ if (typeof chrome !== 'undefined' && chrome && chrome.runtime && chrome.runtime.
           break;
         
         case ACTIONS.TOGGLE:
-          console.log('Toggle TOC message received');
-          console.log('Toggle action matched successfully');
+          // console.log('Toggle TOC message received');
+          // console.log('Toggle action matched successfully');
           toggleTOCSidebar();
           sendResponse({ success: true });
           break;
         
         case ACTIONS.REFRESH:
-          console.log('Refresh TOC message received');
-          console.log('Refresh action matched successfully');
+          // console.log('Refresh TOC message received');
+          // console.log('Refresh action matched successfully');
           refreshTOC(true);
           
           // Start auto-refresh sequence when user manually refreshes
@@ -386,13 +386,13 @@ if (typeof chrome !== 'undefined' && chrome && chrome.runtime && chrome.runtime.
           break;
         
         case ACTIONS.SET_POSITION:
-          console.log('Set position message received:', message.position);
+          // console.log('Set position message received:', message.position);
           setPosition(message.position);
           sendResponse({ success: true });
           break;
         
         case ACTIONS.GET_POSITION:
-          console.log('Get position message received');
+          // console.log('Get position message received');
           const position = getCurrentPosition();
           sendResponse({ position: position });
           break;
@@ -432,7 +432,7 @@ window.refreshTOC = function(force = false) {
       const now = Date.now();
       const elapsed = now - window.lastRefreshTime;
       if (elapsed < 500) { // Minimum 500ms between refreshes unless forced
-        console.log('Refresh throttled, skipping (last refresh was ' + elapsed + 'ms ago)');
+        // console.log('Refresh throttled, skipping (last refresh was ' + elapsed + 'ms ago)');
         return;
       }
     }
@@ -444,26 +444,26 @@ window.refreshTOC = function(force = false) {
     loadingElement.style.display = 'block';
     noHeadingsElement.style.display = 'none';
     
-    console.log('Refreshing TOC - scanning for headings');
+    // console.log('Refreshing TOC - scanning for headings');
     // Get headings and build TOC
     const headings = extractHeadings();
     
     if (headings && headings.length > 0) {
-      console.log(`Found ${headings.length} headings, building TOC`);
+      // console.log(`Found ${headings.length} headings, building TOC`);
       buildTOC(headings);
       return true;
     } else {
-      console.log('No headings found on initial scan, will retry after delay');
+      // console.log('No headings found on initial scan, will retry after delay');
       // Try again after a delay if no headings found initially
       setTimeout(() => {
         try {
-          console.log('Retrying heading extraction');
+          // console.log('Retrying heading extraction');
           const retryHeadings = extractHeadings();
           if (retryHeadings && retryHeadings.length > 0) {
-            console.log(`Found ${retryHeadings.length} headings on retry, building TOC`);
+            // console.log(`Found ${retryHeadings.length} headings on retry, building TOC`);
             buildTOC(retryHeadings);
           } else {
-            console.log('No headings found after retry');
+            // console.log('No headings found after retry');
             if (loadingElement && noHeadingsElement) {
               loadingElement.style.display = 'none';
               noHeadingsElement.style.display = 'block';
@@ -487,7 +487,7 @@ window.refreshTOC = function(force = false) {
 function initTOC() {
   // If successfully initialized before, no need to do it again
   if (window.isInitialized) {
-    console.log('TOC already initialized, skipping');
+    // console.log('TOC already initialized, skipping');
     return;
   }
 
@@ -499,12 +499,12 @@ function initTOC() {
 
   // Check if TOC already exists to avoid duplicates
   if (document.getElementById('any-toc-sidebar')) {
-    console.log('TOC sidebar already exists, skipping initialization');
+    // console.log('TOC sidebar already exists, skipping initialization');
     window.isInitialized = true;
     return;
   }
   
-  console.log('Creating TOC sidebar elements');
+  // console.log('Creating TOC sidebar elements');
   
   try {
     // Create the TOC sidebar container
@@ -529,7 +529,7 @@ function initTOC() {
     togglePosButton.title = 'Toggle Position';
     togglePosButton.className = 'any-toc-button';
     togglePosButton.addEventListener('click', (e) => {
-      console.log('Toggle position button clicked');
+      // console.log('Toggle position button clicked');
       togglePosition();
       e.stopPropagation();
     });
@@ -540,7 +540,7 @@ function initTOC() {
     refreshButton.title = 'Refresh TOC';
     refreshButton.className = 'any-toc-button';
     refreshButton.addEventListener('click', (e) => {
-      console.log('Refresh button clicked');
+      // console.log('Refresh button clicked');
       refreshTOC(true); // Force refresh
       
       // Start auto-refresh sequence when user manually refreshes
@@ -557,7 +557,7 @@ function initTOC() {
     closeButton.title = 'Close TOC';
     closeButton.className = 'any-toc-button';
     closeButton.addEventListener('click', (e) => {
-      console.log('Close button clicked');
+      // console.log('Close button clicked');
       toggleTOCSidebar();
       e.stopPropagation();
     });
@@ -598,19 +598,19 @@ function initTOC() {
     collapsedButton.title = 'Show Table of Contents';
     collapsedButton.textContent = 'TOC';
     collapsedButton.addEventListener('click', (e) => {
-      console.log('Collapsed button clicked');
+      // console.log('Collapsed button clicked');
       toggleTOCSidebar();
       e.stopPropagation();
     });
     
     // Insert the TOC elements into the page
-    console.log('Appending TOC elements to document body');
+    // console.log('Appending TOC elements to document body');
     document.body.appendChild(tocSidebar);
     document.body.appendChild(collapsedButton);
     
     // Save position preference if set
     const position = localStorage.getItem('any-toc-position');
-    console.log('Saved position:', position);
+    // console.log('Saved position:', position);
     if (position === 'left') {
       tocSidebar.classList.add('left');
       collapsedButton.classList.add('left');
@@ -618,7 +618,7 @@ function initTOC() {
     
     // Set visibility based on saved preference
     const visibility = localStorage.getItem('any-toc-visibility');
-    console.log('Saved visibility:', visibility);
+    // console.log('Saved visibility:', visibility);
     if (visibility === 'hidden') {
       tocSidebar.classList.add('hidden');
       collapsedButton.classList.add('visible');
@@ -630,7 +630,7 @@ function initTOC() {
     // Setup mutation observer to detect content changes
     setupContentChangeDetection();
     
-    console.log('TOC initialization completed successfully');
+    // console.log('TOC initialization completed successfully');
     window.isInitialized = true;
     
     // Initial refresh to populate TOC
@@ -706,7 +706,7 @@ window.extractHeadings = function() {
   for (const container of containers) {
     if (container) {
       mainContainer = container;
-      console.log('Found content container:', container.tagName, container.id || container.className);
+      // console.log('Found content container:', container.tagName, container.id || container.className);
       break;
     }
   }
@@ -717,24 +717,24 @@ window.extractHeadings = function() {
   }
   
   // Find all h1, h2, h3 elements inside the main container
-  console.log('Searching for headings in container');
+  // console.log('Searching for headings in container');
   let headingElements = mainContainer.querySelectorAll('h1, h2, h3');
   
   // If no headings are found in the main container, try the entire document
   if (headingElements.length === 0) {
-    console.log('No headings found in main container, searching entire document');
+    // console.log('No headings found in main container, searching entire document');
     const allHeadings = document.querySelectorAll('h1, h2, h3');
     
     if (allHeadings.length === 0) {
-      console.log('No headings found in entire document');
+      // console.log('No headings found in entire document');
       return headings;
     }
     
     // Use all headings from the document
-    console.log(`Found ${allHeadings.length} headings in document`);
+    // console.log(`Found ${allHeadings.length} headings in document`);
     headingElements = allHeadings;
   } else {
-    console.log(`Found ${headingElements.length} headings in main container`);
+    // console.log(`Found ${headingElements.length} headings in main container`);
   }
   
   // Extract information from each heading
@@ -744,7 +744,7 @@ window.extractHeadings = function() {
     
     // Skip empty headings
     if (!text) {
-      console.log('Skipping empty heading');
+      // console.log('Skipping empty heading');
       return;
     }
     
@@ -767,14 +767,14 @@ window.extractHeadings = function() {
       position
     });
     
-    console.log(`Added heading: ${text.substring(0, 30)}${text.length > 30 ? '...' : ''} (h${level})`);
+    // console.log(`Added heading: ${text.substring(0, 30)}${text.length > 30 ? '...' : ''} (h${level})`);
   });
   
-  console.log(`Total headings extracted: ${headings.length}`);
+  // console.log(`Total headings extracted: ${headings.length}`);
   // Reverse the array to show headings in reverse order (last heading first)
   const reversedHeadings = headings.reverse();
   
-  console.log('Headings (reversed):', JSON.stringify(reversedHeadings));
+  // console.log('Headings (reversed):', JSON.stringify(reversedHeadings));
   return reversedHeadings;
 };
 
@@ -831,7 +831,7 @@ function getCurrentPosition() {
  * Sets up a mutation observer to detect content changes
  */
 function setupContentChangeDetection() {
-  console.log('Setting up mutation observer for content changes');
+  // console.log('Setting up mutation observer for content changes');
   
   // Create mutation observer
   const observer = new MutationObserver((mutations) => {
@@ -844,7 +844,7 @@ function setupContentChangeDetection() {
           if (node.nodeType === Node.ELEMENT_NODE) {
             // If the node is a heading or contains headings
             if (/^H[1-4]$/i.test(node.tagName) || node.querySelector('h1, h2, h3')) {
-              console.log('Detected new heading content');
+              // console.log('Detected new heading content');
               return true;
             }
           }
@@ -855,7 +855,7 @@ function setupContentChangeDetection() {
           if (node.nodeType === Node.ELEMENT_NODE) {
             if (/^H[1-4]$/i.test(node.tagName) || 
                 (node.querySelector && node.querySelector('h1, h2, h3'))) {
-              console.log('Detected removed heading content');
+              // console.log('Detected removed heading content');
               return true;
             }
           }
@@ -866,7 +866,7 @@ function setupContentChangeDetection() {
     });
     
     if (hasRelevantChanges) {
-      console.log('Content changes detected that affect headings');
+      // console.log('Content changes detected that affect headings');
     }
   });
   
@@ -876,14 +876,14 @@ function setupContentChangeDetection() {
     subtree: true
   });
   
-  console.log('Mutation observer setup complete');
+  // console.log('Mutation observer setup complete');
 }
 
 /**
  * Toggles the TOC sidebar visibility
  */
 window.toggleTOCSidebar = function() {
-  console.log('toggleTOCSidebar called');
+  // console.log('toggleTOCSidebar called');
   
   const tocSidebar = document.getElementById('any-toc-sidebar');
   const collapsedButton = document.getElementById('any-toc-collapsed');
@@ -893,11 +893,11 @@ window.toggleTOCSidebar = function() {
     return;
   }
   
-  console.log('Current state - sidebar hidden:', tocSidebar.classList.contains('hidden'));
-  console.log('Current state - collapsed visible:', collapsedButton.classList.contains('visible'));
+  // console.log('Current state - sidebar hidden:', tocSidebar.classList.contains('hidden'));
+  // console.log('Current state - collapsed visible:', collapsedButton.classList.contains('visible'));
   
   if (tocSidebar.classList.contains('hidden')) {
-    console.log('Showing sidebar');
+    // console.log('Showing sidebar');
     tocSidebar.classList.remove('hidden');
     collapsedButton.classList.remove('visible');
     localStorage.setItem('any-toc-visibility', 'visible');
@@ -914,7 +914,7 @@ window.toggleTOCSidebar = function() {
       autoRefreshAfterPageLoad();
     }
   } else {
-    console.log('Hiding sidebar');
+    // console.log('Hiding sidebar');
     tocSidebar.classList.add('hidden');
     collapsedButton.classList.add('visible');
     localStorage.setItem('any-toc-visibility', 'hidden');
@@ -925,7 +925,7 @@ window.toggleTOCSidebar = function() {
  * Toggles the position of the TOC sidebar (left or right)
  */
 window.togglePosition = function() {
-  console.log('togglePosition called');
+  // console.log('togglePosition called');
   
   const tocSidebar = document.getElementById('any-toc-sidebar');
   const collapsedButton = document.getElementById('any-toc-collapsed');
@@ -947,7 +947,7 @@ window.togglePosition = function() {
  * @param {string} position - 'left' or 'right'
  */
 window.setPosition = function(position) {
-  console.log('setPosition called with:', position);
+  // console.log('setPosition called with:', position);
   
   const tocSidebar = document.getElementById('any-toc-sidebar');
   const collapsedButton = document.getElementById('any-toc-collapsed');
@@ -958,12 +958,12 @@ window.setPosition = function(position) {
   }
   
   if (position === 'left') {
-    console.log('Moving to left side');
+    // console.log('Moving to left side');
     tocSidebar.classList.add('left');
     collapsedButton.classList.add('left');
     localStorage.setItem('any-toc-position', 'left');
   } else {
-    console.log('Moving to right side');
+    // console.log('Moving to right side');
     tocSidebar.classList.remove('left');
     collapsedButton.classList.remove('left');
     localStorage.setItem('any-toc-position', 'right');
@@ -1004,7 +1004,7 @@ window.removeCurrentDomainFromAllowList = function() {
     // Remove domain from allowed list if present
     customDomains.splice(index, 1);
     localStorage.setItem('any-toc-allowed-domains', JSON.stringify(customDomains));
-    console.log('Removed domain from allowed list:', currentDomain);
+    // console.log('Removed domain from allowed list:', currentDomain);
   }
   
   // Check if domain is in built-in allowed domains
@@ -1023,7 +1023,7 @@ window.removeCurrentDomainFromAllowList = function() {
     if (!disallowedDomains.includes(currentDomain)) {
       disallowedDomains.push(currentDomain);
       localStorage.setItem('any-toc-disallowed-domains', JSON.stringify(disallowedDomains));
-      console.log('Added domain to disallowed list:', currentDomain);
+      // console.log('Added domain to disallowed list:', currentDomain);
     }
   }
   
@@ -1049,13 +1049,13 @@ window.addCurrentDomainToAllowList = function() {
   if (disallowedIndex !== -1) {
     disallowedDomains.splice(disallowedIndex, 1);
     localStorage.setItem('any-toc-disallowed-domains', JSON.stringify(disallowedDomains));
-    console.log('Removed domain from disallowed list:', currentDomain);
+    // console.log('Removed domain from disallowed list:', currentDomain);
   }
   
   // Check if domain is already in built-in allowed list
   for (const domain of CONFIG.ALLOWED_DOMAINS) {
     if (currentDomain.includes(domain)) {
-      console.log('Domain already in built-in allowed list, no need to add to custom list');
+      // console.log('Domain already in built-in allowed list, no need to add to custom list');
       // Reload the page to activate TOC
       window.location.reload();
       return true;
@@ -1079,14 +1079,14 @@ window.addCurrentDomainToAllowList = function() {
   
   // Check if domain is already in list
   if (customDomains.includes(currentDomain)) {
-    console.log('Domain already in allowed list:', currentDomain);
+    // console.log('Domain already in allowed list:', currentDomain);
     return true;
   }
   
   // Add domain to list
   customDomains.push(currentDomain);
   localStorage.setItem('any-toc-allowed-domains', JSON.stringify(customDomains));
-  console.log('Added domain to allowed list:', currentDomain);
+  // console.log('Added domain to allowed list:', currentDomain);
   
   // Reload the page to activate TOC
   window.location.reload();
@@ -1099,4 +1099,4 @@ window.addCurrentDomainToAllowList = function() {
  */
 window.isCurrentDomainAllowed = function() {
   return isAllowedPage();
-}; 
+};
