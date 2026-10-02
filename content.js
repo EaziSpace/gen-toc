@@ -647,7 +647,10 @@
       button.type = 'button';
       button.className = `item lv-${item.level}${item.kind === 'prompt' ? ' prompt' : ''}`;
       button.dataset.i = String(i);
-      button.textContent = item.text;
+      const label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = item.text;
+      button.append(label);
       button.title = item.text;
       li.append(button);
       fragment.append(li);
@@ -1106,16 +1109,20 @@
       all: unset;
       box-sizing: border-box;
       position: relative;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-      overflow: hidden;
+      display: block;
       width: 100%;
       padding: 5px 8px 5px calc(12px + var(--indent, 0px));
       border-radius: 7px;
       color: var(--muted);
-      overflow-wrap: anywhere;
       cursor: pointer;
+    }
+    /* Clamped inside the padding box, so a cut-off third line can't peek through. */
+    .item .label {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+      overflow-wrap: anywhere;
     }
     .item.lv-1 { color: var(--fg); font-weight: 500; }
     .item.lv-2 { --indent: 12px; }
